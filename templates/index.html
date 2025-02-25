@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视频内容分析工具</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .frame-image {
+            max-width: 100%;
+            height: auto;
+            margin: 10px 0;
+        }
+        .results-container {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .drop-zone {
+            border: 2px dashed #ccc;
+            border-radius: 4px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.3s ease;
+        }
+        .drop-zone:hover {
+            border-color: #0d6efd;
+        }
+        .upload-icon {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 10px;
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
+        }
+        .drop-zone:hover .upload-icon {
+            opacity: 1;
+        }
+        .model-card {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .model-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .model-card.selected {
+            border-color: #0d6efd;
+            background-color: #f8f9fa;
+        }
+        .description-text {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            white-space: pre-line;
+            line-height: 1.6;
+            font-size: 0.95em;
+        }
+        .description-text strong {
+            color: #0d6efd;
+            font-weight: 600;
+        }
+        .description-text br {
+            margin-bottom: 8px;
+        }
+        .badge {
+            font-size: 0.9em;
+            padding: 0.4em 0.8em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-4">视频内容分析工具</h1>
+        
+        <form id="upload-form" enctype="multipart/form-data">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">上传视频</h5>
+                    <div class="drop-zone mb-3" id="drop-zone">
+                        <input type="file" 
+                               id="file-input" 
+                               name="video"
+                               class="d-none" 
+                               accept="video/mp4,video/x-m4v,video/*">
+                        <div>
+                            <img src="/static/icon/upload-icon.png" alt="上传图标" class="upload-icon">
+                            <p class="mb-0">拖放视频文件到这里或点击选择文件</p>
+                            <small class="text-muted">支持的格式：MP4, AVI, MOV, MKV</small>
+                        </div>
+                    </div>
+                    <div id="file-info" class="mb-3 text-muted"></div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">选择分析模型</h5>
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <div class="card model-card" data-model="llama">
+                                <div class="card-body">
+                                    <h6>Llama2-Vision</h6>
+                                    <p class="small text-muted mb-0">开源视觉语言模型</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card model-card" data-model="gemini">
+                                <div class="card-body">
+                                    <h6>Gemini</h6>
+                                    <p class="small text-muted mb-0">Google 多模态模型</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card model-card" data-model="minimax">
+                                <div class="card-body">
+                                    <h6>MiniMax</h6>
+                                    <p class="small text-muted mb-0">国产视觉分析模型</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="card model-card" data-model="qwen">
+                                <div class="card-body">
+                                    <h6>Qwen2.5-VL</h6>
+                                    <p class="small text-muted mb-0">阿里通义千问视觉模型</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <input type="hidden" name="model" id="selected-model" value="llama">
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">分析设置</h5>
+                    <div class="mb-3">
+                        <label for="object-input" class="form-label">请描述要查找的目标：</label>
+                        <input type="text" 
+                               name="object_str" 
+                               class="form-control" 
+                               id="object-input" 
+                               placeholder="例如：一个穿红色衣服的人、一辆蓝色自行车..."
+                               required>
+                        <div class="form-text">请尽可能详细地描述目标的特征，如颜色、形状、位置等</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="analyze-btn">
+                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        <span class="button-text">开始分析</span>
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">分析结果</h5>
+                <div id="results" class="results-container">
+                    <div class="text-center text-muted">
+                        分析结果将在这里显示
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('upload-form');
+            const fileInput = document.getElementById('file-input');
+            const analyzeBtn = document.getElementById('analyze-btn');
+            const fileInfo = document.getElementById('file-info');
+            const results = document.getElementById('results');
+            const objectInput = document.getElementById('object-input');
+            const dropZone = document.getElementById('drop-zone');
+            const modelCards = document.querySelectorAll('.model-card');
+            const selectedModelInput = document.getElementById('selected-model');
+
+            // 模型选择处理
+            modelCards.forEach(card => {
+                card.addEventListener('click', () => {
+                    modelCards.forEach(c => c.classList.remove('selected'));
+                    card.classList.add('selected');
+                    selectedModelInput.value = card.dataset.model;
+                });
+            });
+
+            // 默认选中第一个模型
+            modelCards[0].classList.add('selected');
+
+            function checkEnableAnalyzeBtn() {
+                const hasFile = fileInput.files.length > 0;
+                const hasObject = objectInput.value.trim() !== '';
+                analyzeBtn.disabled = !(hasFile && hasObject);
+            }
+
+            function updateFileInfo(file) {
+                fileInfo.innerHTML = `
+                    <strong>已选择文件：</strong> ${file.name}<br>
+                    <strong>文件大小：</strong> ${(file.size / (1024 * 1024)).toFixed(2)} MB
+                `;
+            }
+
+            function formatDescription(description) {
+                // 移除多余的空格和换行
+                description = description.trim();
+                
+                // 将描述按行分割
+                let lines = description.split(/\n/).map(line => line.trim()).filter(line => line);
+                
+                // 格式化每一行
+                let formattedLines = lines.map(line => {
+                    // 检查是否包含特定关键词
+                    if (line.match(/^(回答|描述|置信度)[:：]/)) {
+                        // 为关键词添加样式
+                        let [keyword, content] = line.split(/[:：]/, 2);
+                        return `<strong>${keyword}：</strong>${content || ''}`;
+                    }
+                    return line;
+                });
+                
+                // 将所有行连接起来，使用 <br> 作为分隔符
+                return formattedLines.join('<br>');
+            }
+
+            function showError(message) {
+                results.innerHTML = `
+                    <div class="alert alert-danger" role="alert">
+                        ${message}
+                    </div>
+                `;
+            }
+
+            function showLoading() {
+                analyzeBtn.disabled = true;
+                const spinner = analyzeBtn.querySelector('.spinner-border');
+                const buttonText = analyzeBtn.querySelector('.button-text');
+                if (spinner) spinner.classList.remove('d-none');
+                if (buttonText) buttonText.textContent = '分析中...';
+                modelCards.forEach(card => card.style.pointerEvents = 'none');
+            }
+
+            function hideLoading() {
+                analyzeBtn.disabled = false;
+                const spinner = analyzeBtn.querySelector('.spinner-border');
+                const buttonText = analyzeBtn.querySelector('.button-text');
+                if (spinner) spinner.classList.add('d-none');
+                if (buttonText) buttonText.textContent = '开始分析';
+                modelCards.forEach(card => card.style.pointerEvents = 'auto');
+                checkEnableAnalyzeBtn();
+            }
+
+            dropZone.addEventListener('click', () => fileInput.click());
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length) {
+                    updateFileInfo(e.target.files[0]);
+                    checkEnableAnalyzeBtn();
+                }
+            });
+
+            objectInput.addEventListener('input', checkEnableAnalyzeBtn);
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.style.borderColor = '#0d6efd';
+            });
+
+            dropZone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                dropZone.style.borderColor = '#ccc';
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.style.borderColor = '#ccc';
+                const files = e.dataTransfer.files;
+                if (files.length) {
+                    fileInput.files = files;
+                    updateFileInfo(files[0]);
+                    checkEnableAnalyzeBtn();
+                }
+            });
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const formData = new FormData(form);
+                const videoFile = fileInput.files[0];
+
+                if (!videoFile) {
+                    showError('请选择视频文件');
+                    return;
+                }
+
+                if (!videoFile.type.startsWith('video/')) {
+                    showError('请选择正确的视频文件格式');
+                    return;
+                }
+
+                if (videoFile.size > 100 * 1024 * 1024) {
+                    showError('文件大小不能超过 100MB');
+                    return;
+                }
+
+                try {
+                    results.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">正在分析视频，请稍候...</p></div>';
+                    showLoading();
+
+                    const response = await fetch('/analyze', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                    }
+
+                    results.innerHTML = '';
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+
+                    while (true) {
+                        const {value, done} = await reader.read();
+                        if (done) {
+                            hideLoading();
+                            break;
+                        }
+
+                        const text = decoder.decode(value);
+                        const lines = text.split('\n').filter(line => line.trim());
+
+                        for (const line of lines) {
+                            try {
+                                const data = JSON.parse(line);
+                                if (data.status === 'success') {
+                                    const frame = data.frame;
+                                    const resultDiv = document.createElement('div');
+                                    resultDiv.className = 'mb-4 p-3 border rounded';
+                                    resultDiv.innerHTML = `
+                                        <h6>第 ${frame.second} 秒</h6>
+                                        <img src="${frame.frame_path}" class="frame-image rounded">
+                                        <div class="mt-2">
+                                            <span class="badge ${frame.is_match ? 'bg-success' : 'bg-secondary'}">
+                                                ${frame.is_match ? '找到目标' : '未找到目标'}
+                                            </span>
+                                            <span class="badge bg-info">置信度：${frame.confidence}/10</span>
+                                        </div>
+                                        <div class="mt-2">
+                                            <strong>详细描述：</strong>
+                                            <div class="description-text">${formatDescription(frame.description)}</div>
+                                        </div>
+                                    `;
+                                    results.appendChild(resultDiv);
+                                    results.scrollTop = results.scrollHeight;
+                                } else if (data.status === 'error') {
+                                    console.error('处理错误:', data.message);
+                                    showError(data.message);
+                                }
+                            } catch (e) {
+                                console.error('解析结果错误:', e);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    showError('分析过程中发生错误: ' + error.message);
+                    console.error('Error:', error);
+                    hideLoading();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
