@@ -5,49 +5,145 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>视频内容分析工具</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
+        :root {
+            --primary-color: #4361ee;
+            --secondary-color: #3f37c9;
+            --accent-color: #4895ef;
+            --light-color: #f8f9fa;
+            --dark-color: #212529;
+        }
+        
+        body {
+            background-color: #f5f7fa;
+            color: #333;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding-top: 60px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .navbar {
+            background-color: var(--primary-color);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            color: white !important;
+        }
+        
+        .nav-link {
+            color: rgba(255,255,255,0.85) !important;
+            font-weight: 500;
+        }
+        
+        .nav-link:hover {
+            color: white !important;
+        }
+        
+        .main-container {
+            flex: 1;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+        }
+        
+        .card:hover {
+            box-shadow: 0 10px 15px rgba(0,0,0,0.1);
+        }
+        
+        .card-title {
+            color: var(--primary-color);
+            font-weight: 600;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        
         .frame-image {
             max-width: 100%;
             height: auto;
             margin: 10px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+        
         .results-container {
             max-height: 600px;
             overflow-y: auto;
+            padding: 10px;
         }
+        
         .drop-zone {
             border: 2px dashed #ccc;
-            border-radius: 4px;
-            padding: 20px;
+            border-radius: 10px;
+            padding: 30px;
             text-align: center;
             cursor: pointer;
-            transition: border-color 0.3s ease;
+            transition: all 0.3s ease;
+            background-color: #f8f9fa;
         }
+        
         .drop-zone:hover {
-            border-color: #0d6efd;
+            border-color: var(--primary-color);
+            background-color: #f0f4f8;
         }
+        
         .upload-icon {
-            width: 48px;
-            height: 48px;
-            margin-bottom: 10px;
-            opacity: 0.7;
+            width: 64px;
+            height: 64px;
+            margin-bottom: 15px;
+            opacity: 0.8;
             transition: opacity 0.3s ease;
         }
+        
         .drop-zone:hover .upload-icon {
             opacity: 1;
+            transform: scale(1.05);
         }
+        
         .model-card {
             cursor: pointer;
             transition: all 0.3s ease;
+            height: 100%;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 2px solid transparent;
         }
+        
         .model-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 8px 15px rgba(0,0,0,0.1);
         }
+        
         .model-card.selected {
-            border-color: #0d6efd;
-            background-color: #f8f9fa;
+            border-color: var(--primary-color);
+            background-color: #f0f7ff;
         }
+        
+        .model-card .card-body {
+            padding: 20px;
+        }
+        
+        .model-card h6 {
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+        
+        .model-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            color: var(--primary-color);
+        }
+        
         .description-text {
             background-color: #f8f9fa;
             padding: 15px;
@@ -56,28 +152,169 @@
             white-space: pre-line;
             line-height: 1.6;
             font-size: 0.95em;
+            border-left: 4px solid var(--accent-color);
         }
+        
         .description-text strong {
-            color: #0d6efd;
+            color: var(--primary-color);
             font-weight: 600;
         }
+        
         .description-text br {
             margin-bottom: 8px;
         }
+        
         .badge {
             font-size: 0.9em;
-            padding: 0.4em 0.8em;
+            padding: 0.5em 0.8em;
+            border-radius: 6px;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            padding: 10px 20px;
+            font-weight: 500;
+            border-radius: 6px;
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--secondary-color);
+            border-color: var(--secondary-color);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .form-control {
+            border-radius: 6px;
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+        }
+        
+        .form-control:focus {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 0.25rem rgba(67, 97, 238, 0.25);
+        }
+        
+        .result-item {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .result-item:hover {
+            box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        
+        .result-header {
+            background-color: #f8f9fa;
+            padding: 10px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .result-body {
+            padding: 15px;
+        }
+        
+        .result-badges {
+            margin: 10px 0;
+        }
+        
+        footer {
+            background-color: var(--dark-color);
+            color: white;
+            padding: 20px 0;
+            margin-top: 40px;
+        }
+        
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .footer-links a {
+            color: rgba(255,255,255,0.8);
+            margin-left: 15px;
+            text-decoration: none;
+        }
+        
+        .footer-links a:hover {
+            color: white;
+        }
+        
+        @media (max-width: 768px) {
+            .footer-content {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .footer-links {
+                margin-top: 15px;
+            }
+            
+            .footer-links a {
+                margin: 0 10px;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container mt-5">
-        <h1 class="mb-4">视频内容分析工具</h1>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-camera-video"></i> 视频内容分析工具
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#"><i class="bi bi-house"></i> 首页</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#models"><i class="bi bi-cpu"></i> 模型</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#results"><i class="bi bi-bar-chart"></i> 结果</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="https://github.com/yourusername/video-content-analysis" target="_blank">
+                            <i class="bi bi-github"></i> GitHub
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container main-container">
+        <div class="row mt-4 mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center py-4">
+                        <h1 class="display-5 fw-bold text-primary mb-3">视频内容智能分析</h1>
+                        <p class="lead mb-4">上传视频，选择模型，快速分析视频中的目标内容</p>
+                        <div class="d-flex justify-content-center">
+                            <div class="badge bg-primary me-2"><i class="bi bi-check-circle"></i> 多模型支持</div>
+                            <div class="badge bg-success me-2"><i class="bi bi-check-circle"></i> 实时分析</div>
+                            <div class="badge bg-info"><i class="bi bi-check-circle"></i> 高精度识别</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         
         <form id="upload-form" enctype="multipart/form-data">
-            <div class="card mb-4">
+            <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title">上传视频</h5>
+                    <h5 class="card-title"><i class="bi bi-upload"></i> 上传视频</h5>
                     <div class="drop-zone mb-3" id="drop-zone">
                         <input type="file" 
                                id="file-input" 
@@ -86,29 +323,32 @@
                                accept="video/mp4,video/x-m4v,video/*">
                         <div>
                             <img src="/static/icon/upload-icon.png" alt="上传图标" class="upload-icon">
-                            <p class="mb-0">拖放视频文件到这里或点击选择文件</p>
-                            <small class="text-muted">支持的格式：MP4, AVI, MOV, MKV</small>
+                            <h5 class="mb-2">拖放视频文件到这里或点击选择文件</h5>
+                            <p class="text-muted mb-0">支持的格式：MP4, AVI, MOV, MKV</p>
+                            <p class="text-muted">最大文件大小：100MB</p>
                         </div>
                     </div>
                     <div id="file-info" class="mb-3 text-muted"></div>
                 </div>
             </div>
 
-            <div class="card mb-4">
+            <div class="card" id="models">
                 <div class="card-body">
-                    <h5 class="card-title">选择分析模型</h5>
+                    <h5 class="card-title"><i class="bi bi-cpu"></i> 选择分析模型</h5>
                     <div class="row">
                         <div class="col-md-3 mb-3">
                             <div class="card model-card" data-model="llama">
-                                <div class="card-body">
+                                <div class="card-body text-center">
+                                    <div class="model-icon"><i class="bi bi-robot"></i></div>
                                     <h6>Llama2-Vision</h6>
-                                    <p class="small text-muted mb-0">开源视觉语言模型</p>
+                                    <p class="small text-muted mb-0">本地部署视觉语言模型</p>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-3 mb-3">
                             <div class="card model-card" data-model="gemini">
-                                <div class="card-body">
+                                <div class="card-body text-center">
+                                    <div class="model-icon"><i class="bi bi-google"></i></div>
                                     <h6>Gemini</h6>
                                     <p class="small text-muted mb-0">Google 多模态模型</p>
                                 </div>
@@ -116,7 +356,8 @@
                         </div>
                         <div class="col-md-3 mb-3">
                             <div class="card model-card" data-model="minimax">
-                                <div class="card-body">
+                                <div class="card-body text-center">
+                                    <div class="model-icon"><i class="bi bi-lightning"></i></div>
                                     <h6>MiniMax</h6>
                                     <p class="small text-muted mb-0">国产视觉分析模型</p>
                                 </div>
@@ -124,7 +365,8 @@
                         </div>
                         <div class="col-md-3 mb-3">
                             <div class="card model-card" data-model="qwen">
-                                <div class="card-body">
+                                <div class="card-body text-center">
+                                    <div class="model-icon"><i class="bi bi-cloud"></i></div>
                                     <h6>Qwen2.5-VL</h6>
                                     <p class="small text-muted mb-0">阿里通义千问视觉模型</p>
                                 </div>
@@ -135,9 +377,9 @@
                 </div>
             </div>
 
-            <div class="card mb-4">
+            <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title">分析设置</h5>
+                    <h5 class="card-title"><i class="bi bi-gear"></i> 分析设置</h5>
                     <div class="mb-3">
                         <label for="object-input" class="form-label">请描述要查找的目标：</label>
                         <input type="text" 
@@ -156,17 +398,34 @@
             </div>
         </form>
 
-        <div class="card">
+        <div class="card" id="results">
             <div class="card-body">
-                <h5 class="card-title">分析结果</h5>
+                <h5 class="card-title"><i class="bi bi-bar-chart"></i> 分析结果</h5>
                 <div id="results" class="results-container">
-                    <div class="text-center text-muted">
-                        分析结果将在这里显示
+                    <div class="text-center text-muted py-5">
+                        <i class="bi bi-search" style="font-size: 3rem;"></i>
+                        <p class="mt-3">分析结果将在这里显示</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    
+    <!-- 页脚 -->
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div>
+                    <p class="mb-0">&copy; 2024 视频内容分析工具 | 版本 1.0.0</p>
+                </div>
+                <div class="footer-links">
+                    <a href="#"><i class="bi bi-github"></i> GitHub</a>
+                    <a href="#"><i class="bi bi-question-circle"></i> 帮助</a>
+                    <a href="#"><i class="bi bi-envelope"></i> 联系我们</a>
+                </div>
+            </div>
+        </div>
+    </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
@@ -200,9 +459,21 @@
             }
 
             function updateFileInfo(file) {
+                const fileSize = (file.size / (1024 * 1024)).toFixed(2);
+                const fileSizeClass = fileSize > 50 ? 'text-warning' : 'text-success';
+                
                 fileInfo.innerHTML = `
-                    <strong>已选择文件：</strong> ${file.name}<br>
-                    <strong>文件大小：</strong> ${(file.size / (1024 * 1024)).toFixed(2)} MB
+                    <div class="alert alert-light border">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-file-earmark-play me-3" style="font-size: 2rem;"></i>
+                            <div>
+                                <h6 class="mb-1">${file.name}</h6>
+                                <span class="${fileSizeClass}">
+                                    <i class="bi bi-hdd"></i> ${fileSize} MB
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 `;
             }
 
@@ -231,7 +502,7 @@
             function showError(message) {
                 results.innerHTML = `
                     <div class="alert alert-danger" role="alert">
-                        ${message}
+                        <i class="bi bi-exclamation-triangle me-2"></i> ${message}
                     </div>
                 `;
             }
@@ -268,17 +539,20 @@
 
             dropZone.addEventListener('dragover', (e) => {
                 e.preventDefault();
-                dropZone.style.borderColor = '#0d6efd';
+                dropZone.style.borderColor = '#4361ee';
+                dropZone.style.backgroundColor = '#f0f4f8';
             });
 
             dropZone.addEventListener('dragleave', (e) => {
                 e.preventDefault();
                 dropZone.style.borderColor = '#ccc';
+                dropZone.style.backgroundColor = '#f8f9fa';
             });
 
             dropZone.addEventListener('drop', (e) => {
                 e.preventDefault();
                 dropZone.style.borderColor = '#ccc';
+                dropZone.style.backgroundColor = '#f8f9fa';
                 const files = e.dataTransfer.files;
                 if (files.length) {
                     fileInput.files = files;
@@ -309,7 +583,13 @@
                 }
 
                 try {
-                    results.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">正在分析视频，请稍候...</p></div>';
+                    results.innerHTML = `
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+                            <p class="lead">正在分析视频，请稍候...</p>
+                            <p class="text-muted">分析结果将实时显示</p>
+                        </div>
+                    `;
                     showLoading();
 
                     const response = await fetch('/analyze', {
@@ -330,6 +610,20 @@
                         const {value, done} = await reader.read();
                         if (done) {
                             hideLoading();
+                            // 如果没有结果，显示完成消息
+                            if (results.children.length === 0) {
+                                results.innerHTML = `
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle me-2"></i> 分析完成，未找到匹配结果
+                                    </div>
+                                `;
+                            } else {
+                                // 添加分析完成的提示
+                                const completeMsg = document.createElement('div');
+                                completeMsg.className = 'alert alert-success mt-3';
+                                completeMsg.innerHTML = '<i class="bi bi-check-circle me-2"></i> 分析完成！';
+                                results.appendChild(completeMsg);
+                            }
                             break;
                         }
 
@@ -342,19 +636,57 @@
                                 if (data.status === 'success') {
                                     const frame = data.frame;
                                     const resultDiv = document.createElement('div');
-                                    resultDiv.className = 'mb-4 p-3 border rounded';
+                                    resultDiv.className = 'result-item';
+                                    
+                                    // 获取选中的模型名称
+                                    const modelName = selectedModelInput.value;
+                                    let modelDisplayName = "未知模型";
+                                    let modelIcon = "bi-question-circle";
+                                    
+                                    // 根据模型值设置显示名称和图标
+                                    switch(modelName) {
+                                        case 'llama':
+                                            modelDisplayName = "Llama2-Vision";
+                                            modelIcon = "bi-robot";
+                                            break;
+                                        case 'gemini':
+                                            modelDisplayName = "Google Gemini";
+                                            modelIcon = "bi-google";
+                                            break;
+                                        case 'minimax':
+                                            modelDisplayName = "MiniMax";
+                                            modelIcon = "bi-lightning";
+                                            break;
+                                        case 'qwen':
+                                            modelDisplayName = "Qwen2.5-VL";
+                                            modelIcon = "bi-cloud";
+                                            break;
+                                    }
+                                    
                                     resultDiv.innerHTML = `
-                                        <h6>第 ${frame.second} 秒</h6>
-                                        <img src="${frame.frame_path}" class="frame-image rounded">
-                                        <div class="mt-2">
-                                            <span class="badge ${frame.is_match ? 'bg-success' : 'bg-secondary'}">
-                                                ${frame.is_match ? '找到目标' : '未找到目标'}
-                                            </span>
-                                            <span class="badge bg-info">置信度：${frame.confidence}/10</span>
+                                        <div class="result-header">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <h6 class="mb-0">第 ${frame.second} 秒</h6>
+                                                <span class="badge bg-secondary">
+                                                    <i class="bi ${modelIcon}"></i> ${modelDisplayName}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div class="mt-2">
-                                            <strong>详细描述：</strong>
-                                            <div class="description-text">${formatDescription(frame.description)}</div>
+                                        <div class="result-body">
+                                            <img src="${frame.frame_path}" class="frame-image rounded">
+                                            <div class="result-badges">
+                                                <span class="badge ${frame.is_match ? 'bg-success' : 'bg-secondary'}">
+                                                    <i class="bi ${frame.is_match ? 'bi-check-circle' : 'bi-x-circle'}"></i>
+                                                    ${frame.is_match ? '找到目标' : '未找到目标'}
+                                                </span>
+                                                <span class="badge bg-info">
+                                                    <i class="bi bi-star-fill"></i> 置信度：${frame.confidence}/10
+                                                </span>
+                                            </div>
+                                            <div class="mt-3">
+                                                <h6>详细描述：</h6>
+                                                <div class="description-text">${formatDescription(frame.description)}</div>
+                                            </div>
                                         </div>
                                     `;
                                     results.appendChild(resultDiv);

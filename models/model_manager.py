@@ -156,14 +156,14 @@ class GeminiHandler(BaseModelHandler):
         os.environ["HTTP_PROXY"] = GEMINI_CONFIG["proxy"]["http"]
         self.model = genai.GenerativeModel(
             self.config["name"],
-            generation_config={
-                "temperature": self.config["temperature"],
-                "max_output_tokens": self.config["max_output_tokens"],
-                "top_p": self.config["top_p"],
-                "top_k": self.config["top_k"]
-            }
-        )
-    
+                generation_config={
+                    "temperature": self.config["temperature"],
+                    "max_output_tokens": self.config["max_output_tokens"],
+                    "top_p": self.config["top_p"],
+                    "top_k": self.config["top_k"]
+                }
+            )
+            
     async def analyze_image(self, image_path: str, prompt: str) -> Tuple[bool, str, float]:
         try:
             image = Image.open(image_path)
