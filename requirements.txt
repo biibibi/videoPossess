@@ -15,7 +15,7 @@ httpx>=0.26.0
 
 # AI模型集成
 ollama>=0.1.6
-google-generativeai>=0.3.2
+#google-generativeai>=0.3.2  gemeni依赖
 dashscope>=1.13.6
 openai>=1.10.0
 

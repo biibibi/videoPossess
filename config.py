@@ -1,21 +1,39 @@
 """
-Ollama 服务配置文件
-包含服务器连接、超时、重试等相关配置
+应用配置文件
+包含所有配置项，便于集中管理和修改
 """
 
-# 基础配置
-OLLAMA_CONFIG = {
-    "base_url": "http://123.157.129.172:3336",  # Ollama 服务器地址
-    "timeout": 30,  # 请求超时时间（秒）
-    "retry_count": 3,  # 重试次数
-    "retry_delay": 5,  # 重试间隔（秒）
-    "health_check_timeout": 10,  # 健康检查超时时间（秒）
-    "allow_start_without_ollama": True  # 是否允许在 Ollama 服务不可用时启动应用
-} 
+import os
+from pathlib import Path
 
-# API 相关配置
+# 应用基础配置
+APP_CONFIG = {
+    "debug": os.environ.get("DEBUG", "False").lower() == "true",
+    "log_file": os.environ.get("LOG_FILE", "app.log"),
+    "upload_dir": os.environ.get("UPLOAD_DIR", "uploads"),
+    "frames_dir": os.environ.get("FRAMES_DIR", "frames"),
+    "templates_dir": os.environ.get("TEMPLATES_DIR", "templates"),
+    "static_dir": os.environ.get("STATIC_DIR", "static"),
+    "max_upload_size": int(os.environ.get("MAX_UPLOAD_SIZE", 100 * 1024 * 1024)),  # 默认100MB
+    "allowed_video_types": ["video/mp4", "video/quicktime", "video/x-msvideo", "application/octet-stream"],
+    "frame_quality": 85,  # JPEG质量
+    "max_frame_size": (800, 800),  # 最大帧尺寸
+}
+
+# Ollama 服务配置
+OLLAMA_CONFIG = {
+    "base_url": os.environ.get("OLLAMA_BASE_URL", "http://123.157.129.172:3336"),
+    "enable_ollama": os.environ.get("ENABLE_OLLAMA", "False").lower() == "true",
+    "timeout": int(os.environ.get("OLLAMA_TIMEOUT", 30)),
+    "retry_count": int(os.environ.get("OLLAMA_RETRY_COUNT", 2)),
+    "retry_delay": int(os.environ.get("OLLAMA_RETRY_DELAY", 3)),
+    "health_check_timeout": int(os.environ.get("OLLAMA_HEALTH_CHECK_TIMEOUT", 10)),
+    "allow_start_without_ollama": os.environ.get("ALLOW_START_WITHOUT_OLLAMA", "True").lower() == "true"
+}
+
+# Ollama API 配置
 OLLAMA_API_CONFIG = {
-    "base_url": "http://123.157.129.172:3336",
+    "base_url": OLLAMA_CONFIG["base_url"],
     "endpoints": {
         "tags": "/api/tags",      # 获取可用模型列表
         "chat": "/api/chat",      # 对话接口
@@ -32,10 +50,33 @@ OLLAMA_API_CONFIG = {
         "chat": "llama2"                     # 对话模型
     },
     "retry": {
-        "max_attempts": 3,  # 最大重试次数
-        "delay": 5         # 重试延迟（秒）
+        "max_attempts": OLLAMA_CONFIG["retry_count"],
+        "delay": OLLAMA_CONFIG["retry_delay"]
     }
-} 
+}
+
+# 视频处理配置
+VIDEO_CONFIG = {
+    "max_frames_per_second": 0.5,  # 每秒处理的最大帧数 (0.5 = 每2秒一帧)
+    "preprocess": {
+        "contrast_limit": 2.0,
+        "tile_grid_size": (8, 8),
+        "quality": APP_CONFIG["frame_quality"]
+    }
+}
+
+# WebSocket配置
+WEBSOCKET_CONFIG = {
+    "ping_interval": 20,  # 心跳间隔（秒）
+    "ping_timeout": 20,   # 心跳超时（秒）
+    "close_timeout": 20,  # 关闭超时（秒）
+    "max_message_size": 10 * 1024 * 1024  # 最大消息大小（10MB）
+}
+
+# 确保所有目录存在
+for directory in [APP_CONFIG["upload_dir"], APP_CONFIG["frames_dir"], 
+                 APP_CONFIG["templates_dir"], APP_CONFIG["static_dir"]]:
+    Path(directory).mkdir(exist_ok=True)
 
 # Gemini 配置
 GEMINI_CONFIG = {
@@ -53,9 +94,9 @@ GEMINI_CONFIG = {
 }
 # MiniMax 配置
 MINIMAX_CONFIG = {
-    "api_key": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJHcm91cE5hbWUiOiJrZW5peCIsIlVzZXJOYW1lIjoia2VuaXgiLCJBY2NvdW50IjoiIiwiU3ViamVjdElEIjoiMTg3OTE3NDIwMDIzNzc2ODg4MCIsIlBob25lIjoiMTU2NTc1NzYxMDYiLCJHcm91cElEIjoiMTg3OTE3NDIwMDIyOTM4MDI3MiIsIlBhZ2VOYW1lIjoiIiwiTWFpbCI6IiIsIkNyZWF0ZVRpbWUiOiIyMDI1LTAyLTIwIDE2OjMyOjA1IiwiVG9rZW5UeXBlIjoxLCJpc3MiOiJtaW5pbWF4In0.H77D2A2PDcDydFO6XitXN_27GImSdMp7jqNF8fSN9tWKfjGE1t2lmd8NJw3Z09aizEujfnbOoR_zhuLJEes-_XbLXAHereyLtv1tLMQCxOW6gp0103fLF40R7eSB_knZzZeKWDGvTkicF9eNPWADMPkzbVpKLYbcvuM0wmyjtZCYbs0vGe6C-b0us4eiKb5ZnIUcCYZ6a6hR24LZlNKwlU55oIlLwKo8U3auuYvLoL81P06T3oY2V4QYub8nVx4EG27rGZExfLi5nYXoXvSjC6wLgERx_U6X9Ef_wkOObauv5JT89M6BRxppzfBBYG1szCfjb3Q62eb2Q9M4XRS1Ug",
-    "group_id": "1879174200229380272",
-    "model": "abab6.5s-chat",
+    "api_key": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJHcm91cE5hbWUiOiJZankiLCJVc2VyTmFtZSI6IllqeSIsIkFjY291bnQiOiIiLCJTdWJqZWN0SUQiOiIxOTEwMzE3MTM1ODYzNzUwNzI2IiwiUGhvbmUiOiIxODY1NzYxODQzMyIsIkdyb3VwSUQiOiIxOTEwMzE3MTM1ODU1MzYyMTE4IiwiUGFnZU5hbWUiOiIiLCJNYWlsIjoiIiwiQ3JlYXRlVGltZSI6IjIwMjUtMDQtMTAgMjM6NTQ6MDMiLCJUb2tlblR5cGUiOjEsImlzcyI6Im1pbmltYXgifQ.VVQiLz2t_bN3TG9ra54f4DzPQQQ2NIgtQA_HmX64Yy0JKWWPLQaDQDpYuKgMCmHIi61lLtgsZWfAzCObpfpfMz7_0kLaCAP18Kg4MePOmabFacHukKV3aeBdES7-WtZGgVQEwl7MElM3PCEhd5LBuqbiJNNURA10sFGgk6mrlQ6h_6CigHD46Zmnf1urlPFO-kJRan8vOvSRPTOHOtcT6SU5QNhivggkUU0Lh1aRN9U3Xzuby1Jxb3IEPqyNTUQzLDHIEQuOfM_kNAnC3XjjyeqM4GFSa_UyofjJg67mVhKoiOaERLLqOx8zDK61k2B1x0aVM1gqkwFXFoa-zIIDHA",
+    "group_id": "1910317135855362118",
+    "model": "MiniMax-Text-01",
     "base_url": "https://api.minimax.chat/v1",
     "timeout": 30,
     "retry_count": 3,
@@ -64,10 +105,10 @@ MINIMAX_CONFIG = {
 
 # Qwen 配置
 QWEN_CONFIG = {
-    "api_key": "195647d0-b531-42ef-a467-fa036b35ad7f",  # ModelScope Token
-    "base_url": "https://api-inference.modelscope.cn/v1/",
-    "model": "Qwen/Qwen2.5-VL-72B-Instruct",
-    "timeout": 30,
+    "api_key": os.getenv("DASHSCOPE_API_KEY", "sk-6b8b715aaea649f986375e79378787f1"),  # 添加之前设置的API密钥作为默认值
+    "base_url": "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+    "model": "qwen-vl-max-2025-04-02",  
+    "timeout": 60,  # 增加超时时间到60秒
     "temperature": 0.7,
     "max_tokens": 2048
 }
