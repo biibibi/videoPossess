@@ -1,0 +1,36 @@
+# ================
+# Python 虚拟环境
+# ================
+# 所有常见虚拟环境目录
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+pythonenv/
+venv*/
+
+# Python 缓存文件
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+*.manifest
+*.spec
+
+# ================
+# 开发环境文件
+# ================
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志与数据库
+*.log
+*.sqlite
+*.pot
+
+# IDE配置
+.vscode/
+.idea/
