@@ -526,14 +526,47 @@ def format_api_response(content, targets, error=None, model_name=None, found_tar
     Returns:
         格式化后的响应字典
     """
+    # 检查是否为智能分析模式
+    is_analysis_mode = False
+    user_query = ""
+    
+    # 检查targets中是否包含智能分析模式标记
+    if targets and isinstance(targets, list):
+        if len(targets) >= 2 and "mode=intelligent_analysis" in targets:
+            is_analysis_mode = True
+            # 第一个元素是用户的查询内容
+            user_query = targets[0]
+            # 处理后的targets仅包含用户查询
+            targets = [user_query]
+    
     if error:
+        if is_analysis_mode:
+            return {
+                "response": f"处理出错: {error}",
+                "description": f"处理出错: {error}",
+                "targets": [],
+                "model": model_name,
+                "status": "error"
+            }
+        else:
+            return {
+                "description": f"处理出错: {error}",
+                "targets": [{"name": target, "found": False} for target in targets],
+                "model": model_name,
+                "status": "error"
+            }
+    
+    # 智能分析模式下，我们主要关注响应内容，而不是目标检测
+    if is_analysis_mode:
         return {
-            "description": f"处理出错: {error}",
-            "targets": [{"name": target, "found": False} for target in targets],
+            "response": content,
+            "description": content,
+            "targets": [],  # 智能分析模式不需要targets
             "model": model_name,
-            "status": "error"
+            "status": "success"
         }
     
+    # 以下是原有的目标搜索模式的处理逻辑
     # 如果提供了found_targets列表，则使用它来确定每个目标是否被找到
     if found_targets is not None:
         # 将found_targets转换为小写以便不区分大小写比较

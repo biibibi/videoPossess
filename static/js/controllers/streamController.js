@@ -10,38 +10,51 @@ const streamController = {
      */
     async startStream() {
         try {
-            if (state.streamActive) {
-                uiController.showAlert('视频流已在运行中', 'info');
-                return;
-            }
-
-            uiController.showAlert('正在连接摄像头...', 'info');
+            if (state.localCameraActive) return;
             
+            state.isProcessing = true;
+            
+            // 请求摄像头访问权限
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     width: { ideal: 1280 },
                     height: { ideal: 720 }
-                }
+                },
+                audio: false
             });
             
             state.mediaStream = stream;
-            elements.streamVideo.srcObject = stream;
+            elements.localCameraVideo.srcObject = stream;
+            elements.localCameraContainer.classList.add('active');
             
-            elements.streamVideo.onloadedmetadata = () => {
-                elements.streamVideo.play();
-                state.streamActive = true;
-                uiController.showAlert('摄像头连接成功', 'success');
+            // 确保视频元素样式正确
+            elements.localCameraVideo.style.width = "100%";
+            elements.localCameraVideo.style.height = "100%";
+            elements.localCameraVideo.style.objectFit = "contain";
+            
+            elements.localCameraVideo.onloadedmetadata = () => {
+                elements.localCameraVideo.play()
+                    .then(() => {
+                        state.localCameraActive = true;
+                        state.isProcessing = false;
+                        uiController.showAlert('info', '本地摄像头已连接'); // 更新消息
+                    })
+                    .catch(error => {
+                        console.error('播放摄像头视频失败:', error);
+                        this.stopStream();
+                        uiController.showAlert('error', '无法启动摄像头');
+                    });
             };
             
-            elements.streamVideo.onerror = (error) => {
-                console.error('视频流加载失败:', error);
-                uiController.showAlert('视频流加载失败', 'error');
+            elements.localCameraVideo.onerror = (error) => {
+                console.error('摄像头视频错误:', error);
                 this.stopStream();
+                uiController.showAlert('error', '摄像头错误: ' + error);
             };
         } catch (error) {
-            console.error('启动视频流时出错:', error);
-            uiController.showAlert('无法访问摄像头，请检查权限设置', 'error');
-            state.streamActive = false;
+            console.error('启动本地摄像头失败:', error); // 更新消息
+            state.isProcessing = false;
+            uiController.showAlert('error', '无法访问摄像头: ' + (error.message || '未授权'));
         }
     },
     

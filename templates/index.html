@@ -45,9 +45,56 @@
             color: white !important;
         }
         
+        /* 模型下拉菜单样式 */
+        .dropdown-menu {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            border: none;
+            border-radius: 8px;
+            padding: 0.5rem;
+            min-width: 280px;
+        }
+        
+        .model-dropdown-item {
+            padding: 0.75rem;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+        
+        .model-dropdown-item:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .model-dropdown-item.selected {
+            background-color: #f0f7ff;
+        }
+        
+        .dropdown-icon-container {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: var(--primary-color);
+            background-color: #f0f7ff;
+            border-radius: 50%;
+            margin-right: 0.75rem;
+        }
+        
+        .dropdown-model-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .dropdown-model-description {
+            font-size: 0.8rem;
+            color: #666;
+        }
+        
         .main-container {
             flex: 1;
-            padding: 1rem 0;
+            padding: 4.5rem 0 1rem 0; /* Increased top padding to account for fixed navbar plus extra space */
             max-width: 960px;
             margin: 0 auto;
         }
@@ -55,9 +102,10 @@
         .card {
             border: none;
             border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-            margin-bottom: 1rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.07);
+            margin-bottom: 1.5rem;
             transition: all 0.3s ease;
+            background-color: #fff;
         }
 
         .card-body {
@@ -298,12 +346,12 @@
             flex: 1;
             min-width: 0;
         }
-
-        .analysis-section {
+        
+        .video-section {
             display: none;
         }
-
-        .analysis-section.active {
+        
+        .video-section.active {
             display: block;
         }
 
@@ -812,6 +860,156 @@
         .rtsp-input-container .input-group {
             box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         }
+
+        /* 功能区域切换样式 */
+        .feature-section {
+            display: none;
+        }
+        
+        .feature-section.active {
+            display: block;
+        }
+        
+        /* 功能切换按钮样式 */
+        #searchModeBtn.active, #newFeatureBtn.active {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+        }
+        
+        /* 新功能区域样式 */
+        .new-feature-container {
+            min-height: 300px;
+        }
+        
+        .new-feature-container .alert {
+            position: relative;
+            opacity: 1;
+            pointer-events: auto;
+            transform: none;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem;
+            max-width: none;
+        }
+        
+        /* 智能分析样式 */
+        .chat-history {
+            height: 300px;
+            overflow-y: auto;
+            padding: 0.5rem;
+            background-color: #f8f9fa;
+            border-radius: 0.5rem;
+        }
+        
+        .chat-message {
+            margin-bottom: 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 1rem;
+            max-width: 80%;
+            position: relative;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .chat-message.user {
+            background-color: var(--primary-color);
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 0.25rem;
+        }
+        
+        .chat-message.assistant {
+            background-color: #f0f0f0;
+            color: #333;
+            margin-right: auto;
+            border-bottom-left-radius: 0.25rem;
+        }
+
+        /* 添加样式支持带图像的消息 */
+        .chat-message.with-image {
+            max-width: 95%;
+            padding: 0.75rem;
+        }
+
+        .chat-message .image-container {
+            margin-bottom: 0.75rem;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            max-width: 100%;
+            text-align: center;
+        }
+
+        .chat-message .image-container img {
+            max-width: 100%;
+            max-height: 200px;
+            object-fit: contain;
+            border-radius: 0.5rem;
+            border: 1px solid #eee;
+            background-color: #fff;
+        }
+
+        .chat-message .result-text {
+            margin-bottom: 0.5rem;
+            line-height: 1.4;
+        }
+
+        .chat-message .more-result {
+            border-top: 1px solid #e5e7eb;
+            padding-top: 0.75rem;
+            margin-top: 0.75rem;
+        }
+
+        .chat-message .message-time {
+            font-size: 0.75rem;
+            color: #999;
+            margin-top: 0.25rem;
+            text-align: right;
+        }
+        
+        .chat-input-area {
+            padding-top: 0.5rem;
+            border-top: 1px solid #dee2e6;
+        }
+        
+        .chat-input-area .input-group textarea {
+            border-radius: 0.5rem 0 0 0.5rem;
+            resize: none;
+        }
+        
+        .chat-input-area .input-group button {
+            border-radius: 0 0.5rem 0.5rem 0;
+        }
+        
+        /* 打字指示器样式 */
+        .typing-indicator {
+            background-color: #f0f0f0;
+            padding: 0.5rem 1rem;
+        }
+        
+        .typing-indicator .dot {
+            display: inline-block;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            margin-right: 2px;
+            background: #666;
+            animation: wave 1.3s linear infinite;
+        }
+        
+        @keyframes wave {
+            0%, 60%, 100% {
+                transform: initial;
+            }
+            30% {
+                transform: translateY(-5px);
+            }
+        }
     </style>
 </head>
 <body>
@@ -841,14 +1039,64 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="#"><i class="bi bi-house"></i> 首页</a>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="modelDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-gear"></i> 模型
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="modelDropdown">
+                            <li>
+                                <a class="dropdown-item model-dropdown-item" href="#" onclick="selectModel('llama')" id="llama-dropdown-item">
+                                    <div class="d-flex align-items-center">
+                                        <div class="dropdown-icon-container">
+                                            <i class="bi bi-robot"></i>
+                                        </div>
+                                        <div>
+                                            <div class="dropdown-model-title">Llama2-Vision</div>
+                                            <div class="dropdown-model-description">本地部署视觉语言模型</div>
+                                        </div>
+                                    </div>
+                                </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#"><i class="bi bi-gear"></i> 模型</a>
+                            <li>
+                                <a class="dropdown-item model-dropdown-item" href="#" onclick="selectModel('gemini')" id="gemini-dropdown-item">
+                                    <div class="d-flex align-items-center">
+                                        <div class="dropdown-icon-container">
+                                            <i class="bi bi-google"></i>
+                                        </div>
+                                        <div>
+                                            <div class="dropdown-model-title">Gemini</div>
+                                            <div class="dropdown-model-description">Google 多模态模型</div>
+                                        </div>
+                                    </div>
+                                </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#"><i class="bi bi-graph-up"></i> 结果</a>
+                            <li>
+                                <a class="dropdown-item model-dropdown-item" href="#" onclick="selectModel('minimax')" id="minimax-dropdown-item">
+                                    <div class="d-flex align-items-center">
+                                        <div class="dropdown-icon-container">
+                                            <i class="bi bi-lightning"></i>
+                                        </div>
+                                        <div>
+                                            <div class="dropdown-model-title">MiniMax</div>
+                                            <div class="dropdown-model-description">国产视觉分析模型</div>
+                                        </div>
+                                    </div>
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item model-dropdown-item" href="#" onclick="selectModel('qwen')" id="qwen-dropdown-item">
+                                    <div class="d-flex align-items-center">
+                                        <div class="dropdown-icon-container">
+                                            <i class="bi bi-cloud"></i>
+                                        </div>
+                                        <div>
+                                            <div class="dropdown-model-title">Qwen2.5-VL</div>
+                                            <div class="dropdown-model-description">阿里通义千问视觉模型</div>
+                                        </div>
+                                    </div>
+                                </a>
+                            </li>
+                        </ul>
                     </li>
                 </ul>
             </div>
@@ -857,8 +1105,8 @@
 
     <!-- 主容器 -->
     <div class="container main-container">
-        <!-- 模型选择区域 -->
-        <div class="card mb-4">
+        <!-- 模型选择区域 - 隐藏，因为已移至导航栏下拉菜单 -->
+        <div class="card mb-4" style="display: none;">
             <div class="card-body">
                 <h5 class="section-title">
                     <i class="bi bi-cpu"></i> 选择分析模型
@@ -907,15 +1155,15 @@
         <!-- 分析方式选择 -->
         <div class="card mb-4">
                         <div class="card-body">
-                <h5 class="section-title">选择分析方式</h5>
+                <h5 class="section-title">选择视频方式</h5>
                 <div class="d-flex justify-content-center gap-4">
-                    <button class="btn btn-primary active" id="uploadBtn" onclick="switchAnalysisMode('upload')">
+                    <button class="btn btn-primary active" id="uploadBtn" onclick="switchVideoMode('upload')">
                                     <i class="bi bi-upload"></i> 上传视频分析
                                 </button>
-                    <button class="btn btn-outline-primary" id="streamBtn" onclick="switchAnalysisMode('stream')">
+                    <button class="btn btn-outline-primary" id="streamBtn" onclick="switchVideoMode('stream')">
                                     <i class="bi bi-camera-video"></i> 本地摄像头分析
                                 </button>
-                    <button class="btn btn-outline-primary" id="ipCameraBtn" onclick="switchAnalysisMode('ipCamera')">
+                    <button class="btn btn-outline-primary" id="ipCameraBtn" onclick="switchVideoMode('ipCamera')">
                                     <i class="bi bi-webcam"></i> 网络摄像头分析
                                 </button>
                 </div>
@@ -923,7 +1171,7 @@
                             </div>
 
         <!-- 上传视频分析区域 -->
-        <div class="card analysis-section active" id="uploadSection">
+        <div class="card video-section active" id="uploadSection">
                                         <div class="card-body">
                 <h5 class="section-title">
                     <i class="bi bi-upload"></i> 上传视频
@@ -958,7 +1206,7 @@
                                                 </div>
 
         <!-- 本地摄像头分析区域 -->
-        <div class="card analysis-section" id="streamSection">
+        <div class="card video-section" id="streamSection">
             <div class="card-body">
                 <h5 class="section-title">
                     <i class="bi bi-camera-video"></i> 本地摄像头
@@ -974,7 +1222,7 @@
         </div>
 
         <!-- 网络摄像头分析区域 -->
-        <div class="card analysis-section" id="ipCameraSection">
+        <div class="card video-section" id="ipCameraSection">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h5 class="section-title mb-0">
@@ -1018,8 +1266,25 @@
             </div>
         </div>
 
+        <!-- 功能切换卡片 -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="section-title">
+                    <i class="bi bi-toggles"></i> 功能选择
+                </h5>
+                <div class="d-flex justify-content-center gap-4">
+                    <button class="btn btn-primary active" id="searchModeBtn" onclick="switchFeatureMode('search')">
+                        <i class="bi bi-search"></i> 目标搜索
+                    </button>
+                    <button class="btn btn-outline-primary" id="newFeatureBtn" onclick="switchFeatureMode('newFeature')">
+                        <i class="bi bi-magic"></i> 智能分析
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- 搜索目标卡片 -->
-        <div class="card mb-4" id="searchTargetCard">
+        <div class="card mb-4 feature-section active" id="searchTargetCard">
             <div class="card-body">
                 <h5 class="section-title">
                     <i class="bi bi-search"></i> 搜索目标
@@ -1056,7 +1321,7 @@
         </div>
 
         <!-- 搜索结果卡片 -->
-        <div class="card mb-4" id="searchResultCard">
+        <div class="card mb-4 feature-section active" id="searchResultCard">
             <div class="card-body">
                 <h5 class="section-title">
                     <i class="bi bi-list-ul"></i> 分析结果
@@ -1070,6 +1335,44 @@
                     <div id="noResultsMessage" class="text-center text-muted py-4">
                         <i class="bi bi-inbox-fill"></i>
                         <p>暂无分析结果</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 新功能卡片 -->
+        <div class="card mb-4 feature-section" id="newFeatureCard" style="display: none;">
+            <div class="card-body">
+                <h5 class="section-title">
+                    <i class="bi bi-chat-dots"></i> 智能分析
+                </h5>
+                <div class="new-feature-container">
+                    <!-- 对话历史显示区域 -->
+                    <div class="chat-input-area mb-3">
+                        <div class="input-group">
+                            <textarea class="form-control" id="chatInput" rows="2" 
+                                     placeholder="请输入您想分析的问题或内容（例如：这是一个交换机，请分析这个交换机是否正常运行）">数数画面中有几个灯</textarea>
+                            <button class="btn btn-primary" type="button" id="sendChatBtn">
+                                <i class="bi bi-send"></i> 开始分析
+                            </button>
+                            <button class="btn btn-danger" type="button" id="stopIntelligentAnalysisBtn" style="display:none;">
+                                <i class="bi bi-stop-fill"></i> 停止
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 对话历史显示区域 - 移至下方 -->
+                    <div class="chat-display-container mt-3">
+                        <div class="card">
+                            <div class="card-body p-3">
+                                <div id="chatHistory" class="chat-history mb-3" style="height: 300px; overflow-y: auto;">
+                                    <div class="text-center text-muted py-4">
+                                        <i class="bi bi-chat-square-text" style="font-size: 2rem;"></i>
+                                        <p class="mt-2">智能分析结果</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1366,10 +1669,54 @@
 
             updateModelSelection(model) {
                 try {
+                    // 更新原始模型卡片
                     document.querySelectorAll('.model-card').forEach(card => {
                         card.classList.remove('selected');
                     });
-                    document.getElementById(`${model}-model`).classList.add('selected');
+                    const modelCard = document.getElementById(`${model}-model`);
+                    if (modelCard) {
+                        modelCard.classList.add('selected');
+                    }
+                    
+                    // 更新下拉菜单中的选择状态
+                    document.querySelectorAll('.model-dropdown-item').forEach(item => {
+                        item.classList.remove('selected');
+                    });
+                    const dropdownItem = document.getElementById(`${model}-dropdown-item`);
+                    if (dropdownItem) {
+                        dropdownItem.classList.add('selected');
+                    }
+                    
+                    // 更新导航栏中模型按钮的显示
+                    const modelDropdown = document.getElementById('modelDropdown');
+                    if (modelDropdown) {
+                        // 根据所选模型设置不同的图标
+                        let icon = 'bi-gear';
+                        let modelName = '模型';
+                        
+                        switch(model) {
+                            case 'llama':
+                                icon = 'bi-robot';
+                                modelName = 'Llama2-Vision';
+                                break;
+                            case 'gemini':
+                                icon = 'bi-google';
+                                modelName = 'Gemini';
+                                break;
+                            case 'minimax':
+                                icon = 'bi-lightning';
+                                modelName = 'MiniMax';
+                                break;
+                            case 'qwen':
+                                icon = 'bi-cloud';
+                                modelName = 'Qwen2.5-VL';
+                                break;
+                        }
+                        
+                        // 更新模型按钮显示
+                        modelDropdown.innerHTML = `<i class="bi ${icon}"></i> ${modelName}`;
+                    }
+                    
                     state.selectedModel = model;
                 } catch (error) {
                     console.error('更新模型选择时出错:', error);
@@ -1384,6 +1731,8 @@
                     elements.videoPreview.src = state.currentVideoURL;
                     
                     elements.dropZone.classList.add('has-video');
+                    elements.videoPreview.style.display = 'block'; // Explicitly set video to display
+                    elements.uploadContent.style.display = 'none'; // Explicitly hide upload content
                     state.hasUploadedVideo = true;
 
                     elements.videoPreview.onloadeddata = () => {
@@ -1407,6 +1756,7 @@
                     if (elements.videoPreview) {
                         elements.videoPreview.pause();
                         elements.videoPreview.removeAttribute('src');
+                        elements.videoPreview.style.display = 'none'; // Explicitly hide video
                         elements.videoPreview.load();
                     }
                     utils.clearVideoResource();
@@ -1647,6 +1997,12 @@
                 try {
                     if (analysisController.isAnalyzing) {
                         analysisController.stopAnalysis();
+                    }
+                    
+                    // 停止智能分析（如果正在进行）
+                    if (typeof intelligentAnalysisController !== 'undefined' && 
+                        intelligentAnalysisController.isAnalyzing) {
+                        intelligentAnalysisController.stopIntelligentAnalysis();
                     }
                     
                     searchResultController.clearResults();
@@ -2724,11 +3080,24 @@
                     analysisController.stopAnalysis();
                     uiController.showAlert('info', '已停止分析并切换模型');
                 }
+                // 停止智能分析
+                if (typeof intelligentAnalysisController !== 'undefined' && intelligentAnalysisController.isAnalyzing) {
+                    intelligentAnalysisController.stopIntelligentAnalysis();
+                    uiController.showAlert('info', '已停止智能分析并切换模型');
+                }
+                // 清空目标搜索结果
+                if (typeof searchResultController !== 'undefined') {
+                    searchResultController.clearResults();
+                }
+                // 清空智能分析结果
+                if (typeof intelligentAnalysisController !== 'undefined') {
+                    intelligentAnalysisController.clearIntelligentAnalysisHistory();
+                }
                 uiController.updateModelSelection(model);
             }
         }
 
-        function switchAnalysisMode(mode) {
+        function switchVideoMode(mode) {
             if (!state.isProcessing) {
                 modeController.switchMode(mode);
             }
@@ -2788,6 +3157,694 @@
 
         function formatTimestamp(timestamp) {
             // ... existing code ...
+        }
+        
+        // 切换功能区域
+        function switchFeatureMode(mode) {
+            try {
+                // 停止分析（如果正在进行）
+                if (analysisController.isAnalyzing) {
+                    analysisController.stopAnalysis();
+                }
+                
+                // 停止智能分析（如果正在进行）
+                if (typeof intelligentAnalysisController !== 'undefined' && 
+                    intelligentAnalysisController.isAnalyzing) {
+                    intelligentAnalysisController.stopIntelligentAnalysis();
+                }
+                
+                // 更新按钮状态
+                const searchModeBtn = document.getElementById('searchModeBtn');
+                const newFeatureBtn = document.getElementById('newFeatureBtn');
+                
+                if (mode === 'search') {
+                    // 激活搜索模式
+                    searchModeBtn.classList.add('active');
+                    searchModeBtn.classList.remove('btn-outline-primary');
+                    searchModeBtn.classList.add('btn-primary');
+                    
+                    newFeatureBtn.classList.remove('active');
+                    newFeatureBtn.classList.remove('btn-primary');
+                    newFeatureBtn.classList.add('btn-outline-primary');
+                    
+                    // 显示搜索相关卡片，隐藏新功能卡片
+                    document.querySelectorAll('.feature-section').forEach(section => {
+                        section.classList.remove('active');
+                        section.style.display = 'none';
+                    });
+                    
+                    const searchTargetCard = document.getElementById('searchTargetCard');
+                    const searchResultCard = document.getElementById('searchResultCard');
+                    
+                    if (searchTargetCard) {
+                        searchTargetCard.classList.add('active');
+                        searchTargetCard.style.display = 'block';
+                    }
+                    
+                    if (searchResultCard) {
+                        searchResultCard.classList.add('active');
+                        searchResultCard.style.display = 'block';
+                    }
+                } else if (mode === 'newFeature') {
+                    // 激活新功能模式
+                    newFeatureBtn.classList.add('active');
+                    newFeatureBtn.classList.remove('btn-outline-primary');
+                    newFeatureBtn.classList.add('btn-primary');
+                    
+                    searchModeBtn.classList.remove('active');
+                    searchModeBtn.classList.remove('btn-primary');
+                    searchModeBtn.classList.add('btn-outline-primary');
+                    
+                    // 显示新功能卡片，隐藏搜索相关卡片
+                    document.querySelectorAll('.feature-section').forEach(section => {
+                        section.classList.remove('active');
+                        section.style.display = 'none';
+                    });
+                    
+                    const newFeatureCard = document.getElementById('newFeatureCard');
+                    if (newFeatureCard) {
+                        newFeatureCard.classList.add('active');
+                        newFeatureCard.style.display = 'block';
+                    }
+                }
+                
+                console.log(`已切换到${mode === 'search' ? '搜索目标' : '智能分析'}模式`);
+            } catch (error) {
+                console.error('切换功能模式时出错:', error);
+            }
+        }
+        
+        // 智能分析控制器
+        const intelligentAnalysisController = {
+            messages: [],
+            isProcessing: false,
+            chatResults: [],
+            currentFrameIndex: 0,
+            isAnalyzing: false,
+            intelligentFrameBuffer: [], // 添加帧缓冲区
+            
+            // 初始化
+            init() {
+                try {
+                    // 绑定发送按钮事件
+                    const sendBtn = document.getElementById('sendChatBtn');
+                    const chatInput = document.getElementById('chatInput');
+                    const stopBtn = document.getElementById('stopIntelligentAnalysisBtn');
+                    
+                    if (sendBtn && chatInput) {
+                        // 点击发送按钮
+                        sendBtn.addEventListener('click', () => {
+                            this.startIntelligentAnalysis();
+                        });
+                        
+                        // 按Enter键发送消息（Shift+Enter换行）
+                        chatInput.addEventListener('keydown', (e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                this.startIntelligentAnalysis();
+                            }
+                        });
+                    }
+                    
+                    // 绑定停止按钮事件
+                    if (stopBtn) {
+                        stopBtn.addEventListener('click', () => {
+                            this.stopIntelligentAnalysis();
+                        });
+                    }
+                } catch (error) {
+                    console.error('初始化智能分析控制器时出错:', error);
+                }
+            },
+            
+            // 停止智能分析
+            stopIntelligentAnalysis() {
+                this.isAnalyzing = false;
+                this.isProcessing = false;
+                this.removeIntelligentAnalysisIndicator();
+                
+                // 如果有剩余的帧需要处理
+                if (this.intelligentFrameBuffer && this.intelligentFrameBuffer.length > 0) {
+                    this.processBatchIntelligentFrames();
+                }
+                
+                // 更新按钮状态
+                this.updateIntelligentAnalysisButtons('idle');
+                
+                console.log('智能分析已停止');
+                uiController.showAlert('info', '智能分析已停止');
+            },
+            
+            // 更新智能分析按钮状态
+            updateIntelligentAnalysisButtons(state) {
+                const sendBtn = document.getElementById('sendChatBtn');
+                const stopBtn = document.getElementById('stopIntelligentAnalysisBtn');
+                
+                if (state === 'analyzing') {
+                    sendBtn.disabled = true;
+                    sendBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> 分析中...';
+                    stopBtn.style.display = 'inline-block'; // 显示停止按钮
+                } else {
+                    sendBtn.disabled = false;
+                    sendBtn.innerHTML = '<i class="bi bi-send"></i> 开始分析';
+                    stopBtn.style.display = 'none'; // 隐藏停止按钮
+                }
+            },
+            
+            // 启动智能分析
+            startIntelligentAnalysis() {
+                try {
+                    if (this.isProcessing) {
+                        uiController.showAlert('info', '正在处理上一条消息，请稍候');
+                        return;
+                    }
+                    
+                    const chatInput = document.getElementById('chatInput');
+                    const message = chatInput.value.trim();
+                    
+                    if (!message) {
+                        uiController.showAlert('error', '请输入分析问题');
+                        return;
+                    }
+                    
+                    // 检查当前分析方式
+                    if (!state.hasUploadedVideo && !state.localCameraActive && !state.ipCameraActive) {
+                        uiController.showAlert('error', '请先上传视频、启动本地摄像头或连接网络摄像头');
+                        return;
+                    }
+                    
+                    if (state.hasUploadedVideo && (!state.streamExtractedFrames || state.streamExtractedFrames.length === 0)) {
+                        uiController.showAlert('error', '视频帧抽取未完成');
+                        return;
+                    }
+                    
+                    // 显示处理中状态
+                    this.isProcessing = true;
+                    this.isAnalyzing = true;
+                    this.currentFrameIndex = 0;
+                    this.intelligentFrameBuffer = []; // 重置帧缓冲区
+                    
+                    // 更新按钮状态
+                    this.updateIntelligentAnalysisButtons('analyzing');
+                    
+                    // 添加用户消息到聊天历史
+                    this.addIntelligentAnalysisMessage('user', message);
+                    
+                    // 清空输入框
+                    chatInput.value = '';
+                    
+                    // 显示等待指示器
+                    this.showIntelligentAnalysisIndicator();
+                    
+                    // 准备开始分析
+                    if (state.hasUploadedVideo) {
+                        const frameCount = state.streamExtractedFrames.length;
+                        uiController.showAlert('info', `开始分析视频，共${frameCount}帧`);
+                        this.analyzeIntelligentVideoFrames(message);
+                    } else if (state.localCameraActive) {
+                        uiController.showAlert('info', '开始分析本地摄像头画面');
+                        this.analyzeIntelligentCameraFrame(message, 'local');
+                    } else if (state.ipCameraActive) {
+                        uiController.showAlert('info', '开始分析网络摄像头画面');
+                        this.analyzeIntelligentCameraFrame(message, 'ip');
+                    }
+                } catch (error) {
+                    console.error('启动智能分析时出错:', error);
+                    this.isProcessing = false;
+                    this.isAnalyzing = false;
+                    this.removeIntelligentAnalysisIndicator();
+                    this.updateIntelligentAnalysisButtons('idle');
+                    uiController.showAlert('error', '分析时出错: ' + error.message);
+                }
+            },
+            
+            // 分析视频帧
+            async analyzeIntelligentVideoFrames(message) {
+                try {
+                    const frameCount = state.streamExtractedFrames.length;
+                    const batchSize = 3; // 每批处理的帧数
+                    
+                    // 更新UI显示开始分析
+                    uiController.showAlert('info', `开始智能分析 ${frameCount} 帧`);
+                    this.addIntelligentSystemMessage(`开始分析，共 ${frameCount} 帧`);
+                    
+                    // 批量处理所有帧
+                    for (let i = 0; i < frameCount; i += batchSize) {
+                        // 如果分析已停止，则退出循环
+                        if (!this.isAnalyzing) {
+                            console.log('智能分析已停止');
+                            break;
+                        }
+                        
+                        const batchEnd = Math.min(i + batchSize, frameCount);
+                        
+                        // 添加当前批次帧到缓冲区
+                        for (let j = i; j < batchEnd; j++) {
+                            const frameImage = state.streamExtractedFrames[j].dataUrl;
+                            if (!frameImage) {
+                                console.warn(`帧 #${j + 1} 图像数据无效`);
+                                continue;
+                            }
+                            
+                            const processedImage = await imagePreprocessor.preprocessImage(frameImage);
+                            
+                            // 添加到缓冲区
+                            this.intelligentFrameBuffer.push({
+                                timestamp: Date.now(),
+                                frameNumber: j + 1,
+                                image: processedImage,
+                                message: message,
+                                videoTime: state.streamExtractedFrames[j].time
+                            });
+                        }
+                        
+                        // 处理当前批次
+                        await this.processBatchIntelligentFrames();
+                        
+                        // 更新进度显示
+                        const progress = Math.min(((i + batchSize) / frameCount * 100), 100).toFixed(1);
+                        if (i + batchSize < frameCount) {
+                            this.addIntelligentSystemMessage(`已分析 ${Math.min(i + batchSize, frameCount)}/${frameCount} 帧 (${progress}%)`);
+                        }
+                        
+                        // 给UI线程一些时间更新
+                        await new Promise(resolve => setTimeout(resolve, 10));
+                    }
+                    
+                    // 确保所有结果已显示
+                    this.displayIntelligentAnalysisResults();
+                    this.removeIntelligentAnalysisIndicator();
+                    this.isProcessing = false;
+                    this.isAnalyzing = false;
+                    
+                    // 更新按钮状态
+                    this.updateIntelligentAnalysisButtons('idle');
+                    
+                    // 分析完成提示
+                    uiController.showAlert('success', '智能分析完成');
+                    this.addIntelligentSystemMessage('分析完成');
+                } catch (error) {
+                    console.error('分析视频帧时出错:', error);
+                    this.removeIntelligentAnalysisIndicator();
+                    this.addIntelligentAnalysisMessage('assistant', `分析视频时出错: ${error.message || '未知错误'}`);
+                    this.isProcessing = false;
+                    this.isAnalyzing = false;
+                }
+            },
+            
+            // 分析摄像头画面（采用3帧批量处理模式）
+            async analyzeIntelligentCameraFrame(message, cameraType, continueFromIndex = null) {
+                try {
+                    this.isAnalyzing = true;
+                    
+                    // 仅在首次调用时重置索引，而不是每次重新递归调用
+                    if (continueFromIndex === null) {
+                        this.currentFrameIndex = 0;
+                    }
+                    
+                    // 创建帧收集循环
+                    const captureFrameInterval = setInterval(async () => {
+                        if (!this.isAnalyzing) {
+                            clearInterval(captureFrameInterval);
+                            return;
+                        }
+                        
+                        let frameImage;
+                        if (cameraType === 'local') {
+                            frameImage = streamController.captureCurrentFrame();
+                        } else if (cameraType === 'ip') {
+                            if (typeof ipCameraController !== 'undefined' && typeof ipCameraController.captureFrame === 'function') {
+                                frameImage = ipCameraController.captureFrame();
+                            } else if (typeof streamController.captureIpCameraFrame === 'function') {
+                                frameImage = streamController.captureIpCameraFrame();
+                            } else {
+                                const img = document.getElementById('ipCameraStream');
+                                if (img && img.complete && img.naturalWidth > 0) {
+                                    const canvas = document.createElement('canvas');
+                                    const ctx = canvas.getContext('2d');
+                                    canvas.width = img.naturalWidth;
+                                    canvas.height = img.naturalHeight;
+                                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                                    frameImage = canvas.toDataURL('image/jpeg', 0.85);
+                                }
+                            }
+                        }
+                        
+                        if (!frameImage) {
+                            console.warn('无法获取摄像头画面，将在下次尝试');
+                            return;
+                        }
+                        
+                        // 处理图像
+                        const processedImage = await imagePreprocessor.preprocessImage(frameImage);
+                        
+                        // 将处理后的帧添加到缓冲区
+                        this.intelligentFrameBuffer.push({
+                            timestamp: Date.now(),
+                            frameNumber: this.currentFrameIndex + 1,
+                            image: processedImage,
+                            message: message
+                        });
+                        
+                        this.currentFrameIndex++;
+                        
+                        // 当收集到3帧或实时流分析停止时，处理缓冲区
+                        if (this.intelligentFrameBuffer.length >= 3 || !this.isAnalyzing) {
+                            clearInterval(captureFrameInterval); // 暂停采集
+                            await this.processBatchIntelligentFrames();
+                            
+                            // 如果分析仍在进行，重新启动采集
+                            if (this.isAnalyzing) {
+                                // 传递当前帧索引，保持递增
+                                this.analyzeIntelligentCameraFrame(message, cameraType, this.currentFrameIndex);
+                            } else {
+                                this.isProcessing = false;
+                            }
+                        }
+                        
+                    }, 1000); // 每秒采集一帧
+                    
+                } catch (error) {
+                    console.error('分析摄像头画面时出错:', error);
+                    this.removeIntelligentAnalysisIndicator();
+                    this.addIntelligentAnalysisMessage('assistant', `分析摄像头画面时出错: ${error.message || '未知错误'}`);
+                    this.isProcessing = false;
+                    this.isAnalyzing = false;
+                }
+            },
+            
+            // 批量处理智能分析帧
+            async processBatchIntelligentFrames() {
+                try {
+                    if (this.intelligentFrameBuffer.length === 0) return;
+                    
+                    const bufferSize = this.intelligentFrameBuffer.length;
+                    console.log(`开始批量处理 ${bufferSize} 帧智能分析`);
+                    
+                    // 创建批处理任务
+                    const batchPromises = this.intelligentFrameBuffer.map(async (frameData) => {
+                        // 分析每一帧
+                        const result = await this.callIntelligentModelAPI(frameData.image, frameData.message);
+                        
+                        // 添加结果
+                        this.chatResults.push({
+                            timestamp: frameData.timestamp,
+                            frameNumber: frameData.frameNumber,
+                            frameImage: frameData.image,
+                            message: frameData.message,
+                            response: result.response,
+                            videoTime: frameData.videoTime // 更新为传入的视频时间
+                        });
+                        
+                        return result;
+                    });
+                    
+                    // 并行处理所有帧
+                    await Promise.all(batchPromises);
+                    
+                    // 显示结果
+                    this.displayIntelligentAnalysisResults();
+                    
+                    // 清空缓冲区
+                    this.intelligentFrameBuffer = [];
+                    
+                } catch (error) {
+                    console.error('批量处理智能分析帧时出错:', error);
+                    this.intelligentFrameBuffer = []; // 出错时也清空缓冲区
+                }
+            },
+            
+            // 调用模型API进行智能分析
+            async callIntelligentModelAPI(frameImage, message) {
+                try {
+                    const chatPrompt = [
+                        message,
+                        "mode=intelligent_analysis"
+                    ];
+                    const result = await ModelAPIService.analyzeImage(state.selectedModel, frameImage, chatPrompt);
+                    if (!result.response && result.description) {
+                        result.response = result.description;
+                    }
+                    if (!result.response) {
+                        result.response = `使用${state.selectedModel}模型分析了您的问题:"${message}"，但未能获得有效回复。`;
+                    }
+                    return result;
+                } catch (error) {
+                    console.error('调用模型API进行智能分析时出错:', error);
+                    return {
+                        response: `分析时发生错误: ${error.message || '未知错误'}`,
+                        error: true
+                    };
+                }
+            },
+            
+            // 显示智能分析结果
+            displayIntelligentAnalysisResults() {
+                try {
+                    if (this.chatResults.length === 0) {
+                        this.addIntelligentAnalysisMessage('assistant', "分析未返回任何结果，请重试。");
+                        return;
+                    }
+                    
+                    // 获取聊天历史容器
+                    const chatHistory = document.getElementById('chatHistory');
+                    
+                    // 显示新结果
+                    // 注意：我们假设新的结果只添加到chatResults数组的末尾，函数每次调用只处理新添加的结果
+                    // 获取最新添加的结果
+                    const newResults = this.chatResults.filter(result => !result.displayed);
+                    
+                    if (newResults.length === 0) {
+                        return; // 没有新结果
+                    }
+                    
+                    // 清除typing指示器
+                    this.removeIntelligentAnalysisIndicator();
+                    
+                    // 首次显示结果时，清空历史
+                    if (this.messages.length <= 1 && this.chatResults.length === newResults.length) {
+                        chatHistory.innerHTML = '';
+                    }
+                    
+                    // 构建HTML
+                    let resultHTML = '';
+                    
+                    // 添加所有新结果
+                    for (const result of newResults) {
+                        let responseText = result.response;
+                        if (!responseText && result.description) {
+                            responseText = result.description;
+                        }
+                        if (!responseText) {
+                            responseText = "模型未返回有效回复";
+                        }
+                        
+                        // 格式化时间显示
+                        const timeDisplay = new Date(result.timestamp).toLocaleTimeString();
+                        let videoTimeDisplay = '';
+                        
+                        // 如果有视频时间，则显示
+                        if (result.videoTime !== null && result.videoTime !== undefined) {
+                            const minutes = Math.floor(result.videoTime / 60);
+                            const seconds = Math.floor(result.videoTime % 60);
+                            videoTimeDisplay = `<span class="result-video-time">视频时间: ${minutes}:${seconds.toString().padStart(2, '0')}</span>`;
+                        }
+                        
+                        resultHTML += `
+                            <div class="result-item">
+                                <div class="result-header">
+                                    <span class="result-timestamp">${timeDisplay}</span>
+                                    <span class="result-frame-number">帧 #${result.frameNumber}</span>
+                                    ${videoTimeDisplay}
+                                </div>
+                                <div class="result-content">
+                                    <div class="result-frame">
+                                        <img src="${result.frameImage}" alt="Frame ${result.frameNumber}">
+                                    </div>
+                                    <div class="result-info">
+                                        <div class="result-description">${responseText.replace(/\n/g, '<br>')}</div>
+                                        <div class="small text-muted mt-2">用户问题: ${result.message}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        
+                        // 标记为已显示
+                        result.displayed = true;
+                    }
+                    
+                    // 添加到聊天历史
+                    chatHistory.insertAdjacentHTML('beforeend', resultHTML);
+                    
+                    // 滚动到底部
+                    chatHistory.scrollTop = chatHistory.scrollHeight;
+                } catch (error) {
+                    console.error('显示智能分析结果时出错:', error);
+                    this.addIntelligentAnalysisMessage('assistant', `显示分析结果时出错: ${error.message || '未知错误'}`);
+                }
+            },
+            
+            // 添加消息到智能分析历史
+            addIntelligentAnalysisMessage(role, content) {
+                try {
+                    const chatHistory = document.getElementById('chatHistory');
+                    if (this.messages.length === 0) {
+                        chatHistory.innerHTML = '';
+                    }
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = `chat-message ${role}`;
+                    const formattedContent = content
+                        .replace(/\n/g, '<br>')
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                        .replace(/\*(.*?)\*/g, '<em>$1</em>');
+                    messageDiv.innerHTML = formattedContent;
+                    chatHistory.appendChild(messageDiv);
+                    this.messages.push({ role, content });
+                    chatHistory.scrollTop = chatHistory.scrollHeight;
+                } catch (error) {
+                    console.error('添加消息到智能分析历史时出错:', error);
+                }
+            },
+            
+            // 显示智能分析打字指示器
+            showIntelligentAnalysisIndicator() {
+                try {
+                    const chatHistory = document.getElementById('chatHistory');
+                    const typingDiv = document.createElement('div');
+                    typingDiv.className = 'chat-message assistant typing-indicator';
+                    typingDiv.id = 'typingIndicator';
+                    typingDiv.innerHTML = '<span>正在分析中</span><span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>';
+                    chatHistory.appendChild(typingDiv);
+                    chatHistory.scrollTop = chatHistory.scrollHeight;
+                    const dots = typingDiv.querySelectorAll('.dot');
+                    dots.forEach((dot, index) => {
+                        dot.style.animationDelay = `${index * 0.3}s`;
+                    });
+                } catch (error) {
+                    console.error('显示智能分析打字指示器时出错:', error);
+                }
+            },
+            
+            // 移除智能分析打字指示器
+            removeIntelligentAnalysisIndicator() {
+                try {
+                    const typingIndicator = document.getElementById('typingIndicator');
+                    if (typingIndicator) {
+                        typingIndicator.remove();
+                    }
+                } catch (error) {
+                    console.error('移除智能分析打字指示器时出错:', error);
+                }
+            },
+            
+            // 清空智能分析历史
+            clearIntelligentAnalysisHistory() {
+                try {
+                    const chatHistory = document.getElementById('chatHistory');
+                    chatHistory.innerHTML = `<div class="text-center text-muted py-4">
+                        <i class="bi bi-chat-square-text" style="font-size: 2rem;"></i>
+                        <p class="mt-2">智能分析结果</p>
+                    </div>`;
+                    this.messages = [];
+                    this.chatResults = [];
+                    this.currentFrameIndex = 0;
+                    this.intelligentFrameBuffer = []; // 清空帧缓冲区
+                } catch (error) {
+                    console.error('清空智能分析历史时出错:', error);
+                }
+            },
+            
+            // 添加系统消息到智能分析历史
+            addIntelligentSystemMessage(message) {
+                const chatHistory = document.getElementById('chatHistory');
+                if (this.messages.length === 0) {
+                    chatHistory.innerHTML = '';
+                }
+                const systemDiv = document.createElement('div');
+                systemDiv.className = 'alert alert-info m-2 p-2';
+                systemDiv.innerHTML = `<i class="bi bi-info-circle me-2"></i>${message}`;
+                chatHistory.appendChild(systemDiv);
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+                setTimeout(() => {
+                    systemDiv.style.transition = 'opacity 0.5s';
+                    systemDiv.style.opacity = '0';
+                    setTimeout(() => {
+                        systemDiv.remove();
+                    }, 500);
+                }, 3000);
+            },
+        };
+        
+        // 在DOMContentLoaded时初始化智能分析控制器
+        document.addEventListener('DOMContentLoaded', () => {
+            intelligentAnalysisController.init();
+            
+            // 为智能分析结果容器添加额外的样式
+            const chatHistory = document.getElementById('chatHistory');
+            if (chatHistory) {
+                // 使样式更接近搜索结果容器
+                chatHistory.style.background = '#f8f9fa';
+                chatHistory.style.borderRadius = '8px';
+                chatHistory.style.padding = '0.5rem';
+                
+                // 添加滚动条样式
+                chatHistory.style.scrollBehavior = 'smooth';
+                
+                // 添加与搜索结果一致的滚动条样式
+                const style = document.createElement('style');
+                style.textContent = `
+                    #chatHistory::-webkit-scrollbar {
+                        width: 6px;
+                    }
+                    
+                    #chatHistory::-webkit-scrollbar-track {
+                        background: #f1f1f1;
+                        border-radius: 3px;
+                    }
+                    
+                    #chatHistory::-webkit-scrollbar-thumb {
+                        background: #888;
+                        border-radius: 3px;
+                    }
+                    
+                    #chatHistory::-webkit-scrollbar-thumb:hover {
+                        background: #666;
+                    }
+                    
+                    /* 确保结果项在智能分析中也有良好的间距和动画 */
+                    #chatHistory .result-item {
+                        background: white;
+                        border-radius: 8px;
+                        margin-bottom: 1rem;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                        overflow: hidden;
+                        opacity: 0;
+                        transform: translateY(20px);
+                        animation: resultAppear 0.3s ease forwards;
+                    }
+                    
+                    /* 调整用户聊天消息的样式，确保不与结果项冲突 */
+                    #chatHistory .chat-message.user {
+                        background-color: var(--primary-color);
+                        color: white;
+                        margin-left: auto;
+                        margin-right: 0;
+                        margin-bottom: 1rem;
+                        max-width: 80%;
+                        padding: 0.75rem 1rem;
+                        border-radius: 1rem;
+                        border-bottom-right-radius: 0.25rem;
+                        display: inline-block;
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+        });
+
+        function switchVideoMode(mode) {
+            if (!state.isProcessing) {
+                modeController.switchMode(mode);
+            }
         }
     </script>
 </body>
