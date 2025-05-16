@@ -46,7 +46,7 @@ class PromptGenerator:
         else:
             # 原有的目标搜索模式
             base_prompt = f"分析图片是否包含: {', '.join(targets)}。"
-            
+        
             # 不同模型的提示词模板
             prompt_templates = {
                 "minimax": base_prompt + """请用JSON格式返回分析结果，格式如下:

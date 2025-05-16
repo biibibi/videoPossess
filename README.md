@@ -29,12 +29,30 @@
   - 支持结果筛选和排序
   - 提供详细的分析报告
 
+## 新增功能：Google Gemini 集成
+
+- **Gemini 视觉分析**
+  - 支持 Google Gemini 多模态大模型
+  - 能够详细分析图像内容和目标
+  - 优化中文响应格式和质量
+
+- **Gemini 模型配置**
+  - 支持配置 Gemini API 参数
+  - 提供代理设置，适合国内网络环境
+  - 可调整温度、token 数等生成参数
+
+- **测试工具**
+  - 提供 `test_gemini.py` 测试脚本
+  - 快速验证 API 连接和响应
+  - 帮助排查常见问题
+
 ## 技术栈
 
 - 前端：HTML5, CSS3, JavaScript
 - 后端：Python, Flask
 - 深度学习：PyTorch, OpenCV
 - 数据库：SQLite
+- API 集成：Google Gemini, Aliyun Qwen, MiniMax
 
 ## 安装步骤
 
@@ -44,8 +62,12 @@ git clone [项目地址]
 cd [项目目录]
 ```
 
-2. 安装依赖
+2. 安装依赖（推荐使用 Python 3.11）
 ```bash
+# 使用自动脚本安装
+./setup_py311_env.sh
+
+# 或手动安装
 pip install -r requirements.txt
 ```
 
@@ -101,22 +123,29 @@ flask run
 .
 ├── main.py              # 主程序入口
 ├── requirements.txt     # 项目依赖
+├── config.py            # 配置文件
+├── setup_py311_env.sh   # Python 3.11 环境设置脚本
+├── test_gemini.py       # Gemini API 测试脚本
 ├── static/             # 静态资源
 │   ├── css/           # 样式文件
 │   ├── js/            # JavaScript文件
 │   └── models/        # 模型文件
 ├── templates/          # HTML模板
 ├── uploads/           # 上传文件目录
-└── frames/            # 视频帧存储目录
+├── frames/            # 视频帧存储目录
+└── docs/              # 文档
+    └── gemini_integration.md  # Gemini 集成文档
 ```
 
 ## 注意事项
 
-1. 确保系统已安装 Python 3.8 或更高版本
+1. 确保系统已安装 Python 3.11 或更高版本
 2. 首次运行前需要安装所有依赖
-3. 确保有足够的磁盘空间存储视频帧
-4. 建议使用现代浏览器（Chrome、Firefox、Edge等）
-5. 实时视频分析需要摄像头支持
+3. 使用 Google Gemini API 需要有效的 API 密钥
+4. 在中国大陆使用时，可能需要配置代理访问 Gemini API
+5. 确保有足够的磁盘空间存储视频帧
+6. 建议使用现代浏览器（Chrome、Firefox、Edge等）
+7. 实时视频分析需要摄像头支持
 
 ## 常见问题
 
@@ -136,6 +165,13 @@ flask run
    - 检查视频质量和光线条件
 
 ## 更新日志
+
+### v1.1.0 (2024-06-xx)
+- 集成 Google Gemini 视觉分析功能
+- 优化模型响应处理
+- 添加代理支持，适配国内网络环境
+- 升级 Python 环境支持到 3.11
+- 提供测试工具和文档
 
 ### v1.0.0 (2024-03-xx)
 - 初始版本发布

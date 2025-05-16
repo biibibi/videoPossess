@@ -80,8 +80,8 @@ for directory in [APP_CONFIG["upload_dir"], APP_CONFIG["frames_dir"],
 
 # Gemini 配置
 GEMINI_CONFIG = {
-    "api_key": "AIzaSyDWzg0EHMQZJaABwkQ7RzmxzWtosL01uVk",
-    "model": "gemini-2.0-flash-exp",  # 使用视觉模型
+    "api_key": "AIzaSyATUsT0Rp0SUW2qy-s5pUo8sOGHZlsSrRs",  # 更新的API密钥
+    "model": "gemini-2.0-flash",  # 更新为您测试示例中使用的模型
     "temperature": 0.7,
     "max_output_tokens": 2048,
     "top_p": 0.8,
@@ -107,7 +107,7 @@ MINIMAX_CONFIG = {
 QWEN_CONFIG = {
     "api_key": os.getenv("DASHSCOPE_API_KEY", "sk-6b8b715aaea649f986375e79378787f1"),  # 添加之前设置的API密钥作为默认值
     "base_url": "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
-    "model": "qwen-vl-max-2025-04-02",  
+    "model": "qwen-vl-max-latest",  
     "timeout": 60,  # 增加超时时间到60秒
     "temperature": 0.7,
     "max_tokens": 2048

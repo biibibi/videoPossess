@@ -1,0 +1,74 @@
+[
+  {
+    "description": "这是一个办公室场景，包含人物，电脑，文件，手机，桌子和椅子等办公用品。",
+    "targets": [
+      {
+        "name": "人物",
+        "found": true
+      },
+      {
+        "name": "电脑",
+        "found": true
+      },
+      {
+        "name": "文件",
+        "found": true
+      },
+      {
+        "name": "手机",
+        "found": true
+      },
+      {
+        "name": "桌子",
+        "found": true
+      },
+      {
+        "name": "椅子",
+        "found": true
+      }
+    ],
+    "model": "gemini",
+    "status": "success",
+    "timestamp": 1747381119.950406,
+    "frame_index": 0,
+    "frame_timestamp": 0.0,
+    "frame_file": "quick_test/frames/frame_000000.jpg",
+    "api_duration": 5.115265607833862
+  },
+  {
+    "description": "这是一个办公室场景，包含人物，电脑，文件，桌子和椅子。",
+    "targets": [
+      {
+        "name": "人物",
+        "found": true
+      },
+      {
+        "name": "电脑",
+        "found": true
+      },
+      {
+        "name": "文件",
+        "found": true
+      },
+      {
+        "name": "手机",
+        "found": false
+      },
+      {
+        "name": "桌子",
+        "found": true
+      },
+      {
+        "name": "椅子",
+        "found": true
+      }
+    ],
+    "model": "gemini",
+    "status": "success",
+    "timestamp": 1747381125.751058,
+    "frame_index": 300,
+    "frame_timestamp": 9.99977011494253,
+    "frame_file": "quick_test/frames/frame_000300.jpg",
+    "api_duration": 3.5317540168762207
+  }
+]

@@ -378,6 +378,7 @@ const analysisController = {
                     if (!state.isAnalyzing) break;
                     
                     const frameData = state.extractedFrames[j];
+                    // 使用用户调整的抽帧间隔计算时间
                     const time = j * state.frameInterval;
                     
                     // 创建分析Promise

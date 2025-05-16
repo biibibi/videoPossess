@@ -11,7 +11,7 @@ const streamController = {
     async startStream() {
         try {
             if (state.localCameraActive) return;
-            
+
             state.isProcessing = true;
             
             // 请求摄像头访问权限
@@ -112,9 +112,12 @@ const streamController = {
      * @returns {number} 抽帧间隔（秒）
      */
     getFrameInterval() {
-        return elements.autoStreamFrameInterval.checked ? 
+        const frameInterval = elements.autoStreamFrameInterval.checked ? 
                CONFIG.defaultFrameInterval : 
                parseFloat(elements.streamFrameInterval.value);
+               
+        console.log(`获取抽帧间隔：${frameInterval}秒 (${elements.autoStreamFrameInterval.checked ? '自动模式' : '手动设置'})`);
+        return frameInterval;
     }
 };
 

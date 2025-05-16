@@ -346,11 +346,11 @@
             flex: 1;
             min-width: 0;
         }
-        
+
         .video-section {
             display: none;
         }
-        
+
         .video-section.active {
             display: block;
         }
@@ -1392,7 +1392,7 @@
         const CONFIG = {
             maxFileSize: 100 * 1024 * 1024, // 100MB
             validVideoTypes: ['video/mp4', 'video/avi', 'video/quicktime', 'video/x-matroska'],
-            alertDuration: 500,
+            alertDuration: 3000, // 延长提示窗口显示时间，从500ms改为3000ms
             defaultModel: 'llama',
             defaultFrameInterval: 2,
             minFrameInterval: 0.5,
@@ -1812,7 +1812,9 @@
                     
                     video.onloadedmetadata = () => {
                         // 在视频数据加载完成后计算总帧数
+                        // 获取用户调整的帧间隔
                         const frameInterval = this.getFrameInterval();
+                        console.log(`使用抽帧间隔: ${frameInterval}秒`);
                         // 修改总帧数计算方法，使用Math.floor来确保只在整数倍的时间点提取帧
                         const totalFrames = Math.floor(video.duration / frameInterval) + 1; // +1是因为要包括0秒的第一帧
                         
@@ -1835,7 +1837,12 @@
             },
             
             getFrameInterval() {
+                // 确保使用用户在界面上设置的帧间隔值
+                if (elements && elements.frameInterval) {
                 return parseFloat(elements.frameInterval.value);
+                }
+                // 如果没有找到元素或值，使用默认值
+                return CONFIG.defaultFrameInterval || 2.0;
             },
             
             extractFrames(video, interval, totalFrames, duration) {
@@ -1845,6 +1852,9 @@
                     
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
+                    
+                    // 初始帧索引和提取计数器
+                    let currentIndex = 0;
                     
                     const extractFrame = (time) => {
                         // 确保不超过视频总长度
@@ -1862,28 +1872,38 @@
                             
                             const frameDataUrl = canvas.toDataURL('image/jpeg', CONFIG.frameQuality);
                             
+                            // 记录精确的当前时间点
+                            const exactTime = video.currentTime;
+                            console.log(`抽取帧 #${state.currentFrameIndex + 1}，时间点: ${exactTime.toFixed(2)}秒`);
+                            
                             state.streamExtractedFrames.push({
-                                time: time,
+                                time: exactTime, // 使用精确的时间点
                                 dataUrl: frameDataUrl
                             });
                             
                             state.currentFrameIndex++;
+                            currentIndex++;
                             
                             // 处理下一帧
-                            if (state.currentFrameIndex < totalFrames) {
-                                // 下一帧的时间点，严格按照间隔增加
-                                const nextTime = state.currentFrameIndex * interval;
+                            if (currentIndex < totalFrames) {
+                                // 获取每次处理帧时的最新间隔值
+                                const currentInterval = this.getFrameInterval();
+                                
+                                // 下一帧的时间点，严格按照当前间隔增加
+                                const nextTime = currentIndex * currentInterval;
                                 
                                 // 检查是否超出视频长度
                                 if (nextTime < duration) {
+                                    // 记录正在使用的间隔
+                                    console.log(`继续抽帧，使用当前间隔: ${currentInterval}秒`);
                                     setTimeout(() => extractFrame(nextTime), 100);
                                 } else {
-                                    console.log(`画面抽取完成，共抽取${state.streamExtractedFrames.length}帧，间隔${interval}秒`);
+                                    console.log(`画面抽取完成，共抽取${state.streamExtractedFrames.length}帧`);
                                     uiController.showAlert('info', `抽取完成`);
                                     URL.revokeObjectURL(video.src);
                                 }
                             } else {
-                                console.log(`画面抽取完成，共抽取${state.streamExtractedFrames.length}帧，间隔${interval}秒`);
+                                console.log(`画面抽取完成，共抽取${state.streamExtractedFrames.length}帧`);
                                 uiController.showAlert('info', `抽取完成`);
                                 URL.revokeObjectURL(video.src);
                             }
@@ -2354,16 +2374,64 @@
                     // 检查targets是否有效，并确保每个目标都有found属性
                     const validTargets = Array.isArray(result.targets) ? result.targets : [];
                     
-                    // 记录每个目标的found状态，便于调试
-                    if (validTargets.length > 0) {
-                        console.log("处理结果目标状态:", validTargets.map(t => `${t.name}: ${t.found}`).join(", "));
-                    } else {
-                        console.warn("结果中没有有效的目标");
-                    }
+                    // 记录原始响应，用于调试
+                    console.log("API返回原始结果对象:", result);
+                    // 仅用于人类查看的JSON格式
+                    console.log("API返回序列化JSON:", JSON.stringify(result, null, 2));
+
+                    // 添加处理不同类型found值的逻辑
+                    const processedTargets = validTargets.map(target => {
+                        if (!target) return null;
+                        
+                        // 创建新对象避免修改原始数据
+                        const processed = { ...target };
+                        const originalValue = target.found;
+                        const originalType = typeof originalValue;
+                        
+                        // 显示原始值信息
+                        console.log(`目标 "${target.name}" 原始found值: ${originalValue} (${originalType})`);
+                        
+                        // 转换为布尔值
+                        if (originalType === 'boolean') {
+                            // 已经是布尔值
+                            processed.isFound = originalValue;
+                        } else if (originalValue === 'True' || originalValue === 'true' || originalValue === 1) {
+                            // 处理字符串"True"或数字1
+                            processed.isFound = true;
+                        } else if (originalValue === 'False' || originalValue === 'false' || originalValue === 0) {
+                            // 处理字符串"False"或数字0
+                            processed.isFound = false;
+                        } else {
+                            // 其他值，直接使用Boolean()转换
+                            processed.isFound = Boolean(originalValue);
+                        }
+                        
+                        // 记录转换后的值
+                        console.log(`目标 "${target.name}" 处理后found值: ${processed.isFound} (boolean)`);
+                        
+                        return processed;
+                    }).filter(t => t !== null);
                     
-                    // 根据found属性过滤目标
-                    const foundTargets = validTargets.filter(t => t && t.found === true);
-                    const notFoundTargets = validTargets.filter(t => t && t.found === false);
+                    // 分类为找到和未找到的目标
+                    const foundTargets = processedTargets.filter(t => t.isFound === true);
+                    const notFoundTargets = processedTargets.filter(t => t.isFound === false);
+                    
+                    // 输出分类结果
+                    console.log(`✅ 找到的目标 (${foundTargets.length}):`, 
+                        foundTargets.map(t => t.name).join(", ") || "无");
+                    console.log(`❌ 未找到的目标 (${notFoundTargets.length}):`, 
+                        notFoundTargets.map(t => t.name).join(", ") || "无");
+                    
+                    // 检查是否有目标未被正确分类
+                    const totalClassified = foundTargets.length + notFoundTargets.length;
+                    if (totalClassified !== processedTargets.length) {
+                        console.warn(
+                            "警告: 部分目标未被正确分类! 总数:", processedTargets.length, 
+                            "找到:", foundTargets.length, 
+                            "未找到:", notFoundTargets.length,
+                            "未分类:", processedTargets.length - totalClassified
+                        );
+                    }
 
                     return `
                         <div class="result-item">
@@ -3381,12 +3449,16 @@
             // 分析视频帧
             async analyzeIntelligentVideoFrames(message) {
                 try {
+                    // 使用用户设置的帧间隔
+                    const frameInterval = fileController.getFrameInterval();
+                    console.log(`智能分析使用帧间隔: ${frameInterval}秒`);
+                    
                     const frameCount = state.streamExtractedFrames.length;
                     const batchSize = 3; // 每批处理的帧数
                     
                     // 更新UI显示开始分析
-                    uiController.showAlert('info', `开始智能分析 ${frameCount} 帧`);
-                    this.addIntelligentSystemMessage(`开始分析，共 ${frameCount} 帧`);
+                    uiController.showAlert('info', `开始智能分析 ${frameCount} 帧, 间隔 ${frameInterval}秒`);
+                    this.addIntelligentSystemMessage(`开始分析，共 ${frameCount} 帧, 间隔 ${frameInterval}秒`);
                     
                     // 批量处理所有帧
                     for (let i = 0; i < frameCount; i += batchSize) {
@@ -3421,9 +3493,9 @@
                         // 处理当前批次
                         await this.processBatchIntelligentFrames();
                         
-                        // 更新进度显示
+                        // 更新进度显示，但减少更新频率，只在每处理10%的帧时更新一次
                         const progress = Math.min(((i + batchSize) / frameCount * 100), 100).toFixed(1);
-                        if (i + batchSize < frameCount) {
+                        if (i + batchSize < frameCount && parseFloat(progress) % 10 < 1) {
                             this.addIntelligentSystemMessage(`已分析 ${Math.min(i + batchSize, frameCount)}/${frameCount} 帧 (${progress}%)`);
                         }
                         
@@ -3431,7 +3503,8 @@
                         await new Promise(resolve => setTimeout(resolve, 10));
                     }
                     
-                    // 确保所有结果已显示
+                    // 确保所有结果已显示并且按正确顺序排序
+                    this.sortIntelligentResults();
                     this.displayIntelligentAnalysisResults();
                     this.removeIntelligentAnalysisIndicator();
                     this.isProcessing = false;
@@ -3452,84 +3525,32 @@
                 }
             },
             
-            // 分析摄像头画面（采用3帧批量处理模式）
-            async analyzeIntelligentCameraFrame(message, cameraType, continueFromIndex = null) {
+            // 添加排序智能分析结果的方法
+            sortIntelligentResults() {
                 try {
-                    this.isAnalyzing = true;
+                    if (this.chatResults.length === 0) return;
                     
-                    // 仅在首次调用时重置索引，而不是每次重新递归调用
-                    if (continueFromIndex === null) {
-                        this.currentFrameIndex = 0;
-                    }
+                    console.log("对智能分析结果进行排序");
                     
-                    // 创建帧收集循环
-                    const captureFrameInterval = setInterval(async () => {
-                        if (!this.isAnalyzing) {
-                            clearInterval(captureFrameInterval);
-                            return;
-                        }
-                        
-                        let frameImage;
-                        if (cameraType === 'local') {
-                            frameImage = streamController.captureCurrentFrame();
-                        } else if (cameraType === 'ip') {
-                            if (typeof ipCameraController !== 'undefined' && typeof ipCameraController.captureFrame === 'function') {
-                                frameImage = ipCameraController.captureFrame();
-                            } else if (typeof streamController.captureIpCameraFrame === 'function') {
-                                frameImage = streamController.captureIpCameraFrame();
-                            } else {
-                                const img = document.getElementById('ipCameraStream');
-                                if (img && img.complete && img.naturalWidth > 0) {
-                                    const canvas = document.createElement('canvas');
-                                    const ctx = canvas.getContext('2d');
-                                    canvas.width = img.naturalWidth;
-                                    canvas.height = img.naturalHeight;
-                                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                                    frameImage = canvas.toDataURL('image/jpeg', 0.85);
+                    // 如果是视频模式且有时间戳，按时间戳排序
+                    if (state.hasUploadedVideo) {
+                        // 视频模式：按视频时间点排序（升序，最早的在前面）
+                        this.chatResults.sort((a, b) => {
+                            // 使用视频时间点作为主要排序依据
+                            if (a.videoTime !== undefined && b.videoTime !== undefined) {
+                                return a.videoTime - b.videoTime;
                                 }
-                            }
-                        }
-                        
-                        if (!frameImage) {
-                            console.warn('无法获取摄像头画面，将在下次尝试');
-                            return;
-                        }
-                        
-                        // 处理图像
-                        const processedImage = await imagePreprocessor.preprocessImage(frameImage);
-                        
-                        // 将处理后的帧添加到缓冲区
-                        this.intelligentFrameBuffer.push({
-                            timestamp: Date.now(),
-                            frameNumber: this.currentFrameIndex + 1,
-                            image: processedImage,
-                            message: message
+                            // 回退到帧号排序
+                            return a.frameNumber - b.frameNumber;
                         });
-                        
-                        this.currentFrameIndex++;
-                        
-                        // 当收集到3帧或实时流分析停止时，处理缓冲区
-                        if (this.intelligentFrameBuffer.length >= 3 || !this.isAnalyzing) {
-                            clearInterval(captureFrameInterval); // 暂停采集
-                            await this.processBatchIntelligentFrames();
-                            
-                            // 如果分析仍在进行，重新启动采集
-                            if (this.isAnalyzing) {
-                                // 传递当前帧索引，保持递增
-                                this.analyzeIntelligentCameraFrame(message, cameraType, this.currentFrameIndex);
+                        console.log("已按视频时间点对智能分析结果排序");
                             } else {
-                                this.isProcessing = false;
+                        // 实时流模式：按帧号排序（升序，最早的在前面）
+                        this.chatResults.sort((a, b) => a.frameNumber - b.frameNumber);
+                        console.log("已按帧号对智能分析结果排序");
                             }
-                        }
-                        
-                    }, 1000); // 每秒采集一帧
-                    
                 } catch (error) {
-                    console.error('分析摄像头画面时出错:', error);
-                    this.removeIntelligentAnalysisIndicator();
-                    this.addIntelligentAnalysisMessage('assistant', `分析摄像头画面时出错: ${error.message || '未知错误'}`);
-                    this.isProcessing = false;
-                    this.isAnalyzing = false;
+                    console.error('排序智能分析结果时出错:', error);
                 }
             },
             
@@ -3562,39 +3583,19 @@
                     // 并行处理所有帧
                     await Promise.all(batchPromises);
                     
-                    // 显示结果
+                    // 对结果进行排序然后显示
+                    this.sortIntelligentResults();
                     this.displayIntelligentAnalysisResults();
                     
                     // 清空缓冲区
                     this.intelligentFrameBuffer = [];
                     
+                    // 注意：移除了每批次处理后显示提示窗口的逻辑，避免频繁闪烁
+                    // 只在analyzeIntelligentVideoFrames主函数中的最终结果显示提示
+                    
                 } catch (error) {
                     console.error('批量处理智能分析帧时出错:', error);
                     this.intelligentFrameBuffer = []; // 出错时也清空缓冲区
-                }
-            },
-            
-            // 调用模型API进行智能分析
-            async callIntelligentModelAPI(frameImage, message) {
-                try {
-                    const chatPrompt = [
-                        message,
-                        "mode=intelligent_analysis"
-                    ];
-                    const result = await ModelAPIService.analyzeImage(state.selectedModel, frameImage, chatPrompt);
-                    if (!result.response && result.description) {
-                        result.response = result.description;
-                    }
-                    if (!result.response) {
-                        result.response = `使用${state.selectedModel}模型分析了您的问题:"${message}"，但未能获得有效回复。`;
-                    }
-                    return result;
-                } catch (error) {
-                    console.error('调用模型API进行智能分析时出错:', error);
-                    return {
-                        response: `分析时发生错误: ${error.message || '未知错误'}`,
-                        error: true
-                    };
                 }
             },
             
@@ -3647,7 +3648,8 @@
                         if (result.videoTime !== null && result.videoTime !== undefined) {
                             const minutes = Math.floor(result.videoTime / 60);
                             const seconds = Math.floor(result.videoTime % 60);
-                            videoTimeDisplay = `<span class="result-video-time">视频时间: ${minutes}:${seconds.toString().padStart(2, '0')}</span>`;
+                            const milliseconds = Math.floor((result.videoTime % 1) * 100);
+                            videoTimeDisplay = `<span class="result-video-time">视频时间: ${minutes}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}</span>`;
                         }
                         
                         resultHTML += `
@@ -3760,18 +3762,145 @@
                 if (this.messages.length === 0) {
                     chatHistory.innerHTML = '';
                 }
+                
+                // 检查是否有之前的系统消息仍在显示，如果有，则移除
+                const existingSystemMsgs = chatHistory.querySelectorAll('.alert.alert-info');
+                existingSystemMsgs.forEach(msg => {
+                    if (msg.style.opacity !== '0') {
+                        msg.style.transition = 'opacity 0.3s';
+                        msg.style.opacity = '0';
+                        setTimeout(() => {
+                            msg.remove();
+                        }, 300);
+                    }
+                });
+                
                 const systemDiv = document.createElement('div');
                 systemDiv.className = 'alert alert-info m-2 p-2';
                 systemDiv.innerHTML = `<i class="bi bi-info-circle me-2"></i>${message}`;
                 chatHistory.appendChild(systemDiv);
                 chatHistory.scrollTop = chatHistory.scrollHeight;
+                
+                // 保持系统消息显示5秒后淡出
                 setTimeout(() => {
                     systemDiv.style.transition = 'opacity 0.5s';
                     systemDiv.style.opacity = '0';
                     setTimeout(() => {
                         systemDiv.remove();
                     }, 500);
-                }, 3000);
+                }, 5000);
+            },
+            
+            // 调用模型API进行智能分析
+            async callIntelligentModelAPI(frameImage, message) {
+                try {
+                    const chatPrompt = [
+                        message,
+                        "mode=intelligent_analysis"
+                    ];
+                    const result = await ModelAPIService.analyzeImage(state.selectedModel, frameImage, chatPrompt);
+                    if (!result.response && result.description) {
+                        result.response = result.description;
+                    }
+                    if (!result.response) {
+                        result.response = `使用${state.selectedModel}模型分析了您的问题:"${message}"，但未能获得有效回复。`;
+                    }
+                    return result;
+                } catch (error) {
+                    console.error('调用模型API进行智能分析时出错:', error);
+                    return {
+                        response: `分析时发生错误: ${error.message || '未知错误'}`,
+                        error: true
+                    };
+                }
+            },
+            
+            // 分析摄像头画面（采用3帧批量处理模式）
+            async analyzeIntelligentCameraFrame(message, cameraType, continueFromIndex = null) {
+                try {
+                    this.isAnalyzing = true;
+                    
+                    // 仅在首次调用时重置索引，而不是每次重新递归调用
+                    if (continueFromIndex === null) {
+                        this.currentFrameIndex = 0;
+                        // 首次启动时显示分析开始提示
+                        this.addIntelligentSystemMessage(`开始分析${cameraType === 'local' ? '本地' : '网络'}摄像头画面`);
+                    }
+                    
+                    // 创建帧收集循环
+                    const captureFrameInterval = setInterval(async () => {
+                        if (!this.isAnalyzing) {
+                            clearInterval(captureFrameInterval);
+                            return;
+                        }
+                        
+                        let frameImage;
+                        if (cameraType === 'local') {
+                            frameImage = streamController.captureCurrentFrame();
+                        } else if (cameraType === 'ip') {
+                            if (typeof ipCameraController !== 'undefined' && typeof ipCameraController.captureFrame === 'function') {
+                                frameImage = ipCameraController.captureFrame();
+                            } else if (typeof streamController.captureIpCameraFrame === 'function') {
+                                frameImage = streamController.captureIpCameraFrame();
+                            } else {
+                                const img = document.getElementById('ipCameraStream');
+                                if (img && img.complete && img.naturalWidth > 0) {
+                                    const canvas = document.createElement('canvas');
+                                    const ctx = canvas.getContext('2d');
+                                    canvas.width = img.naturalWidth;
+                                    canvas.height = img.naturalHeight;
+                                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                                    frameImage = canvas.toDataURL('image/jpeg', 0.85);
+                                }
+                            }
+                        }
+                        
+                        if (!frameImage) {
+                            console.warn('无法获取摄像头画面，将在下次尝试');
+                            return;
+                        }
+                        
+                        // 处理图像
+                        const processedImage = await imagePreprocessor.preprocessImage(frameImage);
+                        
+                        // 将处理后的帧添加到缓冲区
+                        this.intelligentFrameBuffer.push({
+                            timestamp: Date.now(),
+                            frameNumber: this.currentFrameIndex + 1,
+                            image: processedImage,
+                            message: message
+                        });
+                        
+                        this.currentFrameIndex++;
+                        
+                        // 当收集到3帧或实时流分析停止时，处理缓冲区
+                        if (this.intelligentFrameBuffer.length >= 3 || !this.isAnalyzing) {
+                            clearInterval(captureFrameInterval); // 暂停采集
+                            await this.processBatchIntelligentFrames();
+                            
+                            // 如果分析仍在进行，重新启动采集
+                            if (this.isAnalyzing) {
+                                // 每10帧更新一次进度提示（而不是每批次都提示）
+                                if (this.currentFrameIndex % 10 === 0) {
+                                    this.addIntelligentSystemMessage(`已分析 ${this.currentFrameIndex} 帧`);
+                                }
+                                
+                                // 传递当前帧索引，保持递增
+                                this.analyzeIntelligentCameraFrame(message, cameraType, this.currentFrameIndex);
+                            } else {
+                                this.isProcessing = false;
+                            }
+                        }
+                        
+                    }, 1000); // 每秒采集一帧
+                    
+                } catch (error) {
+                    console.error('分析摄像头画面时出错:', error);
+                    this.removeIntelligentAnalysisIndicator();
+                    this.addIntelligentAnalysisMessage('assistant', `分析摄像头画面时出错: ${error.message || '未知错误'}`);
+                    this.isProcessing = false;
+                    this.isAnalyzing = false;
+                }
             },
         };
         

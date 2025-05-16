@@ -42,7 +42,10 @@ const fileController = {
             await new Promise((resolve) => {
                 video.onloadedmetadata = () => {
                     state.videoName = file.name;
-                    state.totalFrames = Math.ceil(video.duration / state.frameInterval);
+                    // 确保使用用户调整的帧间隔值
+                    const frameInterval = parseFloat(elements.frameInterval.value);
+                    state.frameInterval = frameInterval;
+                    state.totalFrames = Math.ceil(video.duration / frameInterval);
                     state.extractedFrames = [];
                     state.currentFrameIndex = 0;
                     resolve();

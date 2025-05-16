@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 from tenacity import retry, stop_after_attempt, wait_exponential
 import logging
 import os
-from config import OLLAMA_CONFIG, OLLAMA_API_CONFIG, APP_CONFIG, MODELS, DEFAULT_MODEL
+from config import OLLAMA_CONFIG, OLLAMA_API_CONFIG, APP_CONFIG, MODELS, DEFAULT_MODEL, GEMINI_CONFIG
 import functools
 import base64
 from openai import OpenAI
@@ -26,6 +26,83 @@ import re
 import cv2
 import numpy as np
 from fastapi.responses import StreamingResponse
+from typing import List, Dict, Any, Callable, TypeVar, Awaitable, Optional, Union
+import inspect
+
+# 函数返回类型定义
+T = TypeVar('T')
+
+# 错误处理装饰器
+def api_error_handler(status_code: int = 500):
+    """
+    API错误处理装饰器，统一处理异常并返回标准化的错误响应
+    
+    Args:
+        status_code: 发生错误时返回的HTTP状态码
+    """
+    def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs) -> T:
+            try:
+                return await func(*args, **kwargs)
+            except Exception as e:
+                # 获取函数名称用于日志
+                func_name = func.__name__
+                logger.error(f"{func_name} 错误: {str(e)}")
+                traceback_info = traceback.format_exc()
+                logger.debug(f"{func_name} 详细错误: {traceback_info}")
+                
+                # 构建标准错误响应
+                return JSONResponse(
+                    status_code=status_code,
+                    content={
+                        "status": "error",
+                        "message": str(e),
+                        "timestamp": time.time()
+                    }
+                )
+        return wrapper
+    return decorator
+
+# 统一API响应生成器
+def create_api_response(
+    status: str = "success", 
+    message: str = None, 
+    data: Any = None, 
+    status_code: int = 200,
+    **extra_fields
+) -> JSONResponse:
+    """
+    创建统一格式的API响应
+    
+    Args:
+        status: 响应状态，'success' 或 'error'
+        message: 响应消息
+        data: 响应数据
+        status_code: HTTP状态码
+        extra_fields: 其他需要包含在响应中的字段
+        
+    Returns:
+        格式化的JSONResponse
+    """
+    response_content = {
+        "status": status,
+        "timestamp": time.time()
+    }
+    
+    if message:
+        response_content["message"] = message
+        
+    if data is not None:
+        response_content["data"] = data
+        
+    # 添加额外字段
+    response_content.update(extra_fields)
+    
+    return JSONResponse(
+        status_code=status_code,
+        content=response_content
+    )
 
 # 兼容性函数，用于替代 asyncio.to_thread
 async def run_in_thread(func, *args, **kwargs):
@@ -67,14 +144,6 @@ STATIC_DIR = Path(APP_CONFIG.get("static_dir", "static"))
 TEMPLATES_DIR.mkdir(exist_ok=True)
 STATIC_DIR.mkdir(exist_ok=True)
 
-# 创建FastAPI应用
-# app = FastAPI(title="Vi-Qwen-gemini-llama") # 移除或注释掉这行
-
-# 挂载静态文件
-# app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static") # 移除或注释掉这行
-
-# 设置模板
-# templates = Jinja2Templates(directory=str(TEMPLATES_DIR)) # 移除或注释掉这行
 
 # 初始化Ollama客户端
 ollama_client = None
@@ -87,22 +156,23 @@ async def create_ollama_client():
     创建Ollama客户端
     
     使用重试机制确保客户端创建成功
+    
+    Returns:
+        Ollama客户端对象或None（如果创建失败）
     """
     global ollama_client
-    
-    try:
-        # 检查Ollama服务是否启用
-        if not ENABLE_OLLAMA:
-            logger.warning("Ollama服务已禁用，跳过客户端创建")
-            return None
+    if not ENABLE_OLLAMA:
+        logger.warning("Ollama服务已禁用，跳过客户端创建")
+        return None
             
+    try:
         # 创建客户端
-        ollama_client = Client(host=OLLAMA_BASE_URL)
+        client = Client(host=OLLAMA_BASE_URL)
         
         # 测试连接
         try:
             # 获取可用模型列表
-            models = await run_in_thread(ollama_client.list)
+            models = await run_in_thread(client.list)
             
             # 检查所需模型是否可用
             required_model = OLLAMA_API_CONFIG['models']['vision']
@@ -113,13 +183,57 @@ async def create_ollama_client():
                 return None
                 
             logger.info(f"Ollama客户端创建成功，连接到 {OLLAMA_BASE_URL}")
-            return ollama_client
+            ollama_client = client
+            return client
         except Exception as test_error:
             logger.error(f"测试Ollama连接失败: {str(test_error)}")
             return None
     except Exception as e:
         logger.error(f"创建Ollama客户端失败: {str(e)}")
         return None
+
+async def check_ollama_connection(force_reconnect=False):
+    """
+    统一的Ollama连接检查和客户端初始化函数
+    
+    检查Ollama服务连接状态，并在需要时创建或重新创建客户端
+    
+    Args:
+        force_reconnect: 是否强制重新连接，即使客户端已存在
+        
+    Returns:
+        (bool, str): 连接状态和消息元组
+    """
+    global ollama_client
+    
+    # 检查是否启用Ollama
+    if not ENABLE_OLLAMA:
+        return False, "Ollama服务已禁用"
+    
+    # 强制重连或客户端不存在时，创建新客户端
+    if force_reconnect or ollama_client is None:
+        logger.info("初始化Ollama客户端" if ollama_client is None else "重新初始化Ollama客户端")
+        ollama_client = await create_ollama_client()
+        
+        if ollama_client is None:
+            return False, "无法创建Ollama客户端连接"
+    
+    # 测试客户端是否可用
+    try:
+        # 简单的模型列表检查
+        models = await run_in_thread(ollama_client.list)
+        
+        # 检查所需模型是否可用
+        required_model = OLLAMA_API_CONFIG['models']['vision']
+        model_names = [m.get('name', '') for m in models.get('models', [])]
+        
+        if required_model not in model_names:
+            return False, f"所需模型 {required_model} 不可用"
+            
+        return True, "Ollama连接正常"
+    except Exception as e:
+        logger.error(f"Ollama连接测试失败: {str(e)}")
+        return False, f"Ollama连接测试失败: {str(e)}"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -133,11 +247,9 @@ async def lifespan(app: FastAPI):
     
     # 初始化Ollama客户端
     if ENABLE_OLLAMA:
-        global ollama_client
-        ollama_client = await create_ollama_client()
-        
-        if ollama_client is None:
-            logger.warning("Ollama客户端初始化失败，应用可能无法正常工作")
+        status, message = await check_ollama_connection()
+        if not status:
+            logger.warning(f"Ollama初始化失败: {message}")
     
     # 确保没有活动的RTSP连接
     await disconnect_rtsp()
@@ -148,6 +260,7 @@ async def lifespan(app: FastAPI):
     logger.info("应用关闭，清理资源...")
     
     # 清理Ollama客户端
+    global ollama_client
     if ollama_client is not None:
         ollama_client = None
     
@@ -229,72 +342,55 @@ async def check_client_status():
     return True
 
 @app.get("/health")
+@api_error_handler(status_code=503)
 async def health_check():
     """
     健康检查端点
     
     检查Ollama服务连接状态和模型可用性
     """
+    # 检查Ollama客户端状态
+    status, message = await check_ollama_connection()
+    
+    if not status:
+        return create_api_response(
+            status="error",
+            message=message,
+            status_code=503
+        )
+    
+    # 测试模型功能
     try:
-        # 检查Ollama客户端状态
-        if not await check_client_status():
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "status": "错误",
-                    "message": "Ollama 客户端初始化失败",
-                    "timestamp": time.time()
-                }
-            )
+        response = await run_in_thread(
+            ollama_client.chat,
+            model=OLLAMA_API_CONFIG['models']['vision'],
+            messages=[{
+                'role': 'user',
+                'content': '测试消息'
+            }]
+        )
         
-        # 测试模型功能
-        try:
-            response = await run_in_thread(
-                ollama_client.chat,
-                model=OLLAMA_API_CONFIG['models']['vision'],
-                messages=[{
-                    'role': 'user',
-                    'content': '测试消息'
-                }]
+        # 检查响应格式
+        if response and 'message' in response:
+            return create_api_response(
+                status="success",
+                message="服务运行正常",
+                ollama_server="已连接",
+                model_status="可用",
+                model_name=OLLAMA_API_CONFIG['models']['vision']
             )
-            
-            # 检查响应格式
-            if response and 'message' in response:
-                return {
-                    "status": "正常",
-                    "ollama_server": "已连接",
-                    "model_status": "可用",
-                    "model_name": OLLAMA_API_CONFIG['models']['vision'],
-                    "timestamp": time.time()
-                }
-            else:
-                return JSONResponse(
-                    status_code=503,
-                    content={
-                        "status": "错误",
-                        "message": "模型响应格式无效",
-                        "timestamp": time.time()
-                    }
-                )
-        except Exception as model_error:
-            logger.error(f"模型测试错误: {str(model_error)}")
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "status": "错误",
-                    "message": f"模型测试失败: {str(model_error)}",
-                    "timestamp": time.time()
-                }
+        else:
+            return create_api_response(
+                status="error",
+                message="模型响应格式无效",
+                status_code=503
             )
-    except Exception as e:
-        logger.error(f"健康检查错误: {str(e)}")
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "错误",
-                "message": str(e),
-                "timestamp": time.time()
-            }
+    except Exception as model_error:
+        logger.error(f"模型测试错误: {str(model_error)}")
+        return create_api_response(
+            status="error",
+            message=f"模型测试失败: {str(model_error)}",
+            status_code=503
         )
 
 @app.get("/api/test")
@@ -423,6 +519,7 @@ async def test_ollama():
 
 # 添加图像分析API端点
 @app.post("/api/analyze")
+@api_error_handler(status_code=500)
 async def analyze_image(request: Request):
     """
     图像分析API端点
@@ -430,55 +527,44 @@ async def analyze_image(request: Request):
     接收图像和搜索目标，调用相应的模型进行分析
     """
     start_time = time.time()
-    try:
-        # 检查请求头中的优先级标记
-        priority = request.headers.get("X-Analysis-Priority", "normal")
-        frame_timestamp = request.headers.get("X-Frame-Timestamp", "unknown")
-        
-        # 记录请求时间和优先级
-        logger.info(f"收到分析请求: 时间戳={frame_timestamp}, 优先级={priority}, 处理开始时间={start_time}")
-        
-        # 解析请求数据
-        data = await request.json()
-        model_name = data.get("model", "")
-        image = data.get("image", "")
-        targets = data.get("targets", [])
-        
-        # 验证请求数据
-        if not model_name or not image or not targets:
-            logger.warning(f"请求参数不完整: model={model_name}, image={'有' if image else '无'}, targets={targets}")
-            return JSONResponse(
-                status_code=400,
-                content=format_api_response(
-                    None, 
-                    targets, 
-                    error="缺少必要的请求参数", 
-                    model_name=model_name
-                )
-            )
-        
-        # 使用统一的模型处理器处理请求
-        result = await ModelProcessor.process(model_name, image, targets, start_time)
-        
-        # 添加处理时间信息
-        processing_time = time.time() - start_time
-        if isinstance(result, dict):
-            result["processing_time"] = processing_time
-            result["timestamp"] = time.time()
-        
-        return result
-        
-    except Exception as e:
-        logger.error(f"图像分析错误: {str(e)}")
-        return JSONResponse(
-            status_code=500,
-            content=format_api_response(
-                None, 
-                targets if 'targets' in locals() else [], 
-                error=str(e),
-                model_name=model_name if 'model_name' in locals() else None
-            )
+    
+    # 检查请求头中的优先级标记
+    priority = request.headers.get("X-Analysis-Priority", "normal")
+    frame_timestamp = request.headers.get("X-Frame-Timestamp", "unknown")
+    
+    # 记录请求时间和优先级
+    logger.info(f"收到分析请求: 时间戳={frame_timestamp}, 优先级={priority}, 处理开始时间={start_time}")
+    
+    # 解析请求数据
+    data = await request.json()
+    model_name = data.get("model", "")
+    image = data.get("image", "")
+    targets = data.get("targets", [])
+    
+    # 验证请求数据
+    if not model_name or not image or not targets:
+        logger.warning(f"请求参数不完整: model={model_name}, image={'有' if image else '无'}, targets={targets}")
+        return create_api_response(
+            status="error",
+            message="缺少必要的请求参数",
+            targets=[{"name": target, "found": False} for target in targets],
+            model_name=model_name,
+            status_code=400
         )
+    
+    # 使用统一的模型处理器处理请求
+    result = await ModelProcessor.process(model_name, image, targets, start_time)
+    
+    # 添加处理时间信息
+    processing_time = time.time() - start_time
+    if isinstance(result, dict):
+        result["processing_time"] = processing_time
+    # 确保结果始终包含时间戳，保证排序的正确性
+    if "timestamp" not in result:
+        result["timestamp"] = time.time()
+    
+    # 确保返回标准JSON格式，使用JSONResponse显式序列化
+    return JSONResponse(content=result)
 
 system_prompts = {
     "minimax": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。",
@@ -546,14 +632,16 @@ def format_api_response(content, targets, error=None, model_name=None, found_tar
                 "description": f"处理出错: {error}",
                 "targets": [],
                 "model": model_name,
-                "status": "error"
+                "status": "error",
+                "timestamp": time.time() # 添加时间戳确保排序
             }
         else:
             return {
                 "description": f"处理出错: {error}",
                 "targets": [{"name": target, "found": False} for target in targets],
                 "model": model_name,
-                "status": "error"
+                "status": "error",
+                "timestamp": time.time() # 添加时间戳确保排序
             }
     
     # 智能分析模式下，我们主要关注响应内容，而不是目标检测
@@ -563,7 +651,8 @@ def format_api_response(content, targets, error=None, model_name=None, found_tar
             "description": content,
             "targets": [],  # 智能分析模式不需要targets
             "model": model_name,
-            "status": "success"
+            "status": "success",
+            "timestamp": time.time() # 添加时间戳确保排序
         }
     
     # 以下是原有的目标搜索模式的处理逻辑
@@ -577,17 +666,111 @@ def format_api_response(content, targets, error=None, model_name=None, found_tar
             # 检查目标是否在found_targets中（不区分大小写）
             target_lower = target.lower() if isinstance(target, str) else target
             is_found = any(target_lower in ft or ft in target_lower for ft in found_targets_lower)
-            target_results.append({"name": target, "found": is_found})
+            target_results.append({"name": target, "found": bool(is_found)})
         
         return {
             "description": content,
             "targets": target_results,
             "model": model_name,
-            "status": "success"
+            "status": "success",
+            "timestamp": time.time() # 添加时间戳确保排序
         }
     
-    # 如果没有提供found_targets，我们需要从content中分析哪些目标被找到
-    # 这是一个简单的启发式方法，可能需要根据模型响应进行调整
+            # 针对Gemini模型的特殊处理
+    if model_name == "gemini":
+        # 创建更精确的匹配模式
+        content_lower = content.lower() if content else ""
+        target_results = []
+        
+        for target in targets:
+            target_lower = target.lower() if isinstance(target, str) else str(target).lower()
+            
+            # 明确表示物体存在的匹配模式 - 扩展更多匹配模式
+            found_patterns = [
+                # 中文匹配模式
+                f"发现{target_lower}", f"找到{target_lower}", f"检测到{target_lower}",
+                f"有{target_lower}", f"存在{target_lower}", f"{target_lower}存在", 
+                f"图像中含有{target_lower}", f"图像中有{target_lower}", f"图像包含{target_lower}",
+                f"可以看到{target_lower}", f"能够看到{target_lower}", f"能看到{target_lower}",
+                # 英文匹配模式 - 添加更多变体以提高匹配率
+                f"found {target_lower}", f"detected {target_lower}", f"contains {target_lower}",
+                f"has {target_lower}", f"there is {target_lower}", f"there are {target_lower}",
+                f"image contains {target_lower}", f"image has {target_lower}",
+                f"can see {target_lower}", f"is visible {target_lower}", f"appears {target_lower}",
+                f"showing {target_lower}", f"displays {target_lower}", f"present {target_lower}",
+                f"i can see {target_lower}", f"we can see {target_lower}", f"there's {target_lower}"
+            ]
+            
+            # 明确表示物体不存在的匹配模式 - 扩展更多匹配模式
+            not_found_patterns = [
+                # 中文匹配模式
+                f"没有{target_lower}", f"未发现{target_lower}", f"未找到{target_lower}", 
+                f"没有看到{target_lower}", f"未检测到{target_lower}", f"不存在{target_lower}",
+                f"{target_lower}未出现", f"{target_lower}不存在", f"{target_lower}没有",
+                f"无法看到{target_lower}", f"看不到{target_lower}", f"没有{target_lower}的踪影",
+                # 英文匹配模式 - 添加更多变体以提高匹配率
+                f"no {target_lower}", f"not found {target_lower}", f"cannot see {target_lower}",
+                f"doesn't contain {target_lower}", f"does not contain {target_lower}",
+                f"didn't find {target_lower}", f"could not find {target_lower}",
+                f"wasn't able to find {target_lower}", f"is not present {target_lower}",
+                f"isn't visible {target_lower}", f"not visible {target_lower}",
+                f"not showing {target_lower}", f"absent {target_lower}",
+                f"i don't see {target_lower}", f"i cannot find {target_lower}",
+                f"couldn't locate {target_lower}", f"not in the image {target_lower}"
+            ]
+            
+            # 提取与目标相关的上下文
+            context_window = 50  # 上下文窗口大小
+            target_positions = []
+            
+            # 找到目标在内容中的所有位置
+            pos = content_lower.find(target_lower)
+            while pos != -1:
+                target_positions.append(pos)
+                pos = content_lower.find(target_lower, pos + 1)
+            
+            # 默认为未找到
+            is_found = False
+            
+            # 首先检查是否有明确的"找到"模式
+            if any(pattern in content_lower for pattern in found_patterns):
+                is_found = True
+                logger.debug(f"Gemini找到目标 '{target}' - 匹配明确的找到模式")
+            # 如果没有明确的"找到"模式，检查目标词是否在内容中
+            elif target_positions:
+                # 检查每个目标出现位置的上下文
+                has_not_found_context = False
+                
+                for pos in target_positions:
+                    # 提取目标词周围的上下文
+                    start = max(0, pos - context_window)
+                    end = min(len(content_lower), pos + len(target_lower) + context_window)
+                    context = content_lower[start:end]
+                    
+                    # 检查上下文中是否有"未找到"模式
+                    if any(pattern in context for pattern in not_found_patterns):
+                        has_not_found_context = True
+                        logger.debug(f"Gemini目标 '{target}' 的上下文包含否定模式")
+                        break
+                
+                # 如果周围上下文没有否定模式，则认为找到了目标
+                if not has_not_found_context:
+                    is_found = True
+                    logger.debug(f"Gemini找到目标 '{target}' - 目标词在内容中且无否定上下文")
+            
+            # 记录最终结果
+            logger.info(f"Gemini模型 - 目标 '{target}' 的查找结果: {is_found}")
+            target_results.append({"name": target, "found": bool(is_found)})
+            
+        return {
+            "description": content,
+            "targets": target_results,
+            "model": model_name,
+            "status": "success",
+            "timestamp": time.time() # 添加时间戳确保排序
+        }
+    
+    # 原有的启发式方法，用于其他模型
     content_lower = content.lower() if content else ""
     target_results = []
     
@@ -613,18 +796,97 @@ def format_api_response(content, targets, error=None, model_name=None, found_tar
                     is_found = False
                     break
         
-        target_results.append({"name": target, "found": is_found})
+        target_results.append({"name": target, "found": bool(is_found)})
     
     return {
         "description": content,
         "targets": target_results,
         "model": model_name,
-        "status": "success"
+        "status": "success",
+        "timestamp": time.time() # 添加时间戳确保排序
     }
 
 # 添加模型处理器类，统一处理不同模型的逻辑
 class ModelProcessor:
     """模型处理器类，统一处理不同模型的API调用"""
+    
+    @staticmethod
+    async def _extract_user_message_text(user_message) -> str:
+        """
+        从用户消息中提取文本内容
+        
+        Args:
+            user_message: 用户消息对象
+            
+        Returns:
+            提取的文本内容
+        """
+        text_content = ""
+        if user_message and isinstance(user_message, dict) and "content" in user_message:
+            if isinstance(user_message["content"], list) and len(user_message["content"]) > 0:
+                if isinstance(user_message["content"][0], dict) and "text" in user_message["content"][0]:
+                    text_content = user_message["content"][0]["text"]
+                elif user_message["content"][0] is not None:
+                    text_content = str(user_message["content"][0])
+            elif isinstance(user_message["content"], str):
+                text_content = user_message["content"]
+        
+        return text_content
+    
+    @staticmethod
+    async def _extract_system_message_text(system_message) -> str:
+        """
+        从系统消息中提取文本内容
+        
+        Args:
+            system_message: 系统消息对象
+            
+        Returns:
+            提取的文本内容
+        """
+        if system_message and isinstance(system_message, dict) and "content" in system_message:
+            return system_message["content"]
+        return "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。"
+    
+    @staticmethod
+    async def _generate_default_query(targets) -> str:
+        """
+        根据目标列表生成默认查询文本
+        
+        Args:
+            targets: 搜索目标列表
+            
+        Returns:
+            生成的查询文本
+        """
+        target_text = "、".join(targets) if targets else "内容"
+        return f"请分析图像中是否含有以下内容：{target_text}"
+    
+    @staticmethod
+    async def _parse_json_from_text(content: str):
+        """
+        从文本中提取和解析JSON内容
+        
+        Args:
+            content: 包含可能JSON内容的文本
+            
+        Returns:
+            解析后的JSON对象，或None
+        """
+        try:
+            # 尝试识别和提取JSON内容
+            json_match = re.search(r'```(?:json)?\s*(.*?)```', content, re.DOTALL)
+            json_text = json_match.group(1).strip() if json_match else content
+            
+            # 清理可能的非JSON文本
+            json_text = re.sub(r'^[^{]*', '', json_text)
+            json_text = re.sub(r'[^}]*$', '', json_text)
+            
+            # 尝试解析
+            return json.loads(json_text)
+        except (json.JSONDecodeError, AttributeError, KeyError) as e:
+            logger.warning(f"JSON解析失败: {str(e)}")
+            return None
     
     @staticmethod
     async def process_minimax(image_data, targets, system_message, user_message, start_time):
@@ -638,41 +900,20 @@ class ModelProcessor:
             api_start_time = time.time()
             logger.info(f"开始调用minimax模型API，时间: {api_start_time}")
             
+            # 提取消息内容
+            text_content = await ModelProcessor._extract_user_message_text(user_message)
+            if not text_content:
+                text_content = await ModelProcessor._generate_default_query(targets)
+                logger.warning(f"无法从user_message提取文本内容，使用默认查询: {text_content}")
+            
+            system_content = await ModelProcessor._extract_system_message_text(system_message)
+            
             # 初始化OpenAI客户端，使用Minimax的API
             client = OpenAI(
                 api_key=api_key,
                 base_url=minimax_config["base_url"],
                 timeout=float(minimax_config.get("timeout", 30.0))
             )
-            
-            # 添加防御性检查，确保user_message有正确的结构
-            text_content = ""
-            if user_message and isinstance(user_message, dict) and "content" in user_message:
-                if isinstance(user_message["content"], list) and len(user_message["content"]) > 0:
-                    if isinstance(user_message["content"][0], dict) and "text" in user_message["content"][0]:
-                        text_content = user_message["content"][0]["text"]
-                    elif user_message["content"][0] is not None:
-                        text_content = str(user_message["content"][0])
-                    else:
-                        # 处理None值的情况
-                        logger.warning("user_message['content'][0]为None")
-                        text_content = ""
-                elif isinstance(user_message["content"], str):
-                    text_content = user_message["content"]
-            
-            # 如果提取失败，生成一个默认的查询文本
-            if not text_content:
-                target_text = "、".join(targets) if targets else "内容"
-                text_content = f"请分析图像中是否含有以下内容：{target_text}"
-                logger.warning(f"无法从user_message提取文本内容，使用默认查询: {text_content}")
-            
-            # 提取system提示词
-            system_content = ""
-            if system_message and isinstance(system_message, dict) and "content" in system_message:
-                system_content = system_message["content"]
-            else:
-                system_content = "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。"
-                logger.warning(f"无法从system_message提取内容，使用默认提示词")
             
             # 发送请求
             response = client.chat.completions.create(
@@ -698,73 +939,27 @@ class ModelProcessor:
                 logger.debug(f"Minimax API 原始返回: {content}")
                 
                 # 尝试解析JSON返回
-                parsed_targets = []
-                description = ""
+                parsed_json = await ModelProcessor._parse_json_from_text(content)
                 
-                try:
-                    # 尝试识别和提取JSON内容
-                    json_match = re.search(r'```(?:json)?\s*(.*?)```', content, re.DOTALL)
-                    json_text = json_match.group(1).strip() if json_match else content
-                    
-                    # 清理可能的非JSON文本
-                    json_text = re.sub(r'^[^{]*', '', json_text)
-                    json_text = re.sub(r'[^}]*$', '', json_text)
-                    
-                    # 尝试解析
-                    parsed_json = json.loads(json_text)
-                    
+                if parsed_json is not None:
                     # 提取关键信息
-                    if "description" in parsed_json:
-                        description = parsed_json["description"]
+                    description = parsed_json.get("description", content)
+                    parsed_targets = parsed_json.get("targets", [])
                     
-                    if "targets" in parsed_json and isinstance(parsed_json["targets"], list):
-                        parsed_targets = parsed_json["targets"]
-                        logger.info(f"成功从Minimax响应提取targets: {json.dumps(parsed_targets, ensure_ascii=False)}")
-                    
-                except (json.JSONDecodeError, AttributeError, KeyError) as e:
-                    # JSON解析失败，尝试正则提取
-                    logger.warning(f"解析Minimax JSON响应失败: {str(e)}, 尝试正则提取")
-                    
-                    # 尝试检测targets结构
-                    if "'targets':" in content or '"targets":' in content:
-                        # 提取description
-                        desc_match = re.search(r"['\"]description['\"]\s*:\s*['\"]([^'\"]+)['\"]", content)
-                        if desc_match:
-                            description = desc_match.group(1)
-                        else:
-                            description = content
-                            
-                        # 创建默认targets
-                        parsed_targets = []
-                        for target in targets:
-                            # 检查目标是否被找到的模式
-                            found_pattern = f"['\"]name['\"](\\s)*:(\\s)*['\"]({re.escape(target)})['\"]([\\s,])*['\"]found['\"](\\s)*:(\\s)*(true|false)"
-                            found_match = re.search(found_pattern, content, re.IGNORECASE)
-                            
-                            if found_match:
-                                is_found = found_match.group(2).lower() == "true"
-                                parsed_targets.append({"name": target, "found": is_found})
-                            else:
-                                parsed_targets.append({"name": target, "found": False})
-                    else:
-                        # 无法解析，使用原始内容
-                        description = content
-                        parsed_targets = []
+                    # 如果成功解析了targets
+                    if parsed_targets:
+                        return {
+                            "description": description,
+                            "targets": parsed_targets,
+                            "model": "minimax",
+                            "status": "success",
+                            "timestamp": time.time()  # 添加时间戳确保排序
+                        }
                 
-                # 构建响应
-                if parsed_targets:
-                    # 使用解析得到的targets
-                    return {
-                        "description": description,
-                        "targets": parsed_targets,
-                        "model": "minimax",
-                        "status": "success"
-                    }
-                else:
-                    # 使用通用响应解析
-                    return format_api_response(description, targets, model_name="minimax")
+                # 使用通用响应解析
+                return format_api_response(content, targets, model_name="minimax")
             else:
-                # 响应没有有效的choices，使用错误内容
+                # 响应没有有效的choices
                 error_msg = "API响应缺少有效的choices"
                 logger.warning(f"Minimax API 响应无效: {error_msg}")
                 content = f"API响应格式无效: {str(response)}"
@@ -786,25 +981,10 @@ class ModelProcessor:
             qwen_config = MODELS["qwen"]
             api_key = qwen_config["api_key"]
             
-            # 添加防御性检查，确保user_message有正确的结构
-            text_content = ""
-            if user_message and isinstance(user_message, dict) and "content" in user_message:
-                if isinstance(user_message["content"], list) and len(user_message["content"]) > 0:
-                    if isinstance(user_message["content"][0], dict) and "text" in user_message["content"][0]:
-                        text_content = user_message["content"][0]["text"]
-                    elif user_message["content"][0] is not None:
-                        text_content = str(user_message["content"][0])
-                    else:
-                        # 处理None值的情况
-                        logger.warning("user_message['content'][0]为None")
-                        text_content = ""
-                elif isinstance(user_message["content"], str):
-                    text_content = user_message["content"]
-            
-            # 如果提取失败，生成一个默认的查询文本
+            # 提取消息内容
+            text_content = await ModelProcessor._extract_user_message_text(user_message)
             if not text_content:
-                target_text = "、".join(targets) if targets else "内容"
-                text_content = f"请分析图像中是否含有以下内容：{target_text}"
+                text_content = await ModelProcessor._generate_default_query(targets)
                 logger.warning(f"无法从user_message提取文本内容，使用默认查询: {text_content}")
             
             # 构建请求数据 - 使用通义千问多模态API格式
@@ -844,98 +1024,66 @@ class ModelProcessor:
             # 使用UTF-8明确编码发送请求
             request_json = json.dumps(request_body, ensure_ascii=False)
             
-            try:
-                # 发送请求，使用重试机制
-                response = await call_api_with_retry(
-                    "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
-                    headers=headers,
-                    data=request_json.encode('utf-8'),
-                    timeout=30.0
-                )
-                
-                # 检查响应状态
-                if response.status_code != 200:
-                    error_msg = f"调用qwenAPI失败，状态码: {response.status_code}, 响应: {response.text}"
-                    logger.error(error_msg)
-                    return format_api_response(None, targets, error=error_msg, model_name="qwen")
-                
-                # 解析响应
-                result_data = response.json()
-                #logger.debug(f"Qwen API 原始返回: {json.dumps(result_data, ensure_ascii=False)}")
-                
-                # 计算API调用时间
-                api_call_time = time.time() - api_start_time
-                logger.info(f"模型qwen API调用完成，耗时: {api_call_time:.2f}秒")
-                
-                # 提取响应内容 - 处理嵌套的结构
-                content = ""
-                parsed_targets = []
-                
-                try:
-                    # 处理嵌套结构
-                    if ("output" in result_data and 
-                        "choices" in result_data["output"] and 
-                        result_data["output"]["choices"] and
-                        isinstance(result_data["output"]["choices"], list) and
-                        len(result_data["output"]["choices"]) > 0 and
-                        "message" in result_data["output"]["choices"][0] and
-                        "content" in result_data["output"]["choices"][0]["message"] and
-                        isinstance(result_data["output"]["choices"][0]["message"]["content"], list) and
-                        len(result_data["output"]["choices"][0]["message"]["content"]) > 0 and
-                        "text" in result_data["output"]["choices"][0]["message"]["content"][0]):
-                        
-                        # 获取文本内容
-                        raw_text = result_data["output"]["choices"][0]["message"]["content"][0]["text"]
-                        
-                        # 从markdown代码块中提取JSON内容
-                        json_match = re.search(r'```(?:json)?\s*(.*?)```', raw_text, re.DOTALL)
-                        if json_match:
-                            json_content = json_match.group(1).strip()
-                            
-                            try:
-                                # 解析JSON
-                                parsed_content = json.loads(json_content)
-                                
-                                # 提取描述和目标
-                                if "description" in parsed_content:
-                                    content = parsed_content["description"]
-                                
-                                if "targets" in parsed_content and isinstance(parsed_content["targets"], list):
-                                    parsed_targets = parsed_content["targets"]
-                                    
-                                #logger.info(f"成功从Qwen响应中提取JSON内容: {json.dumps(parsed_content, ensure_ascii=False)}")
-                            except json.JSONDecodeError as json_err:
-                                logger.error(f"无法解析Qwen返回的JSON内容: {json_err}")
-                                content = raw_text
-                        else:
-                            # 如果没有找到JSON代码块，使用原始文本
-                            content = raw_text
-                    else:
-                        # 如果无法找到嵌套结构，尝试使用原始结果
-                        content = str(result_data)
-                except Exception as extract_error:
-                    logger.error(f"提取Qwen响应内容时出错: {str(extract_error)}")
-                    content = str(result_data)
-                
-                # 根据解析出的目标构建响应
-                if parsed_targets:
-                    # 使用解析出的targets
-                    return {
-                        "description": content,
-                        "targets": parsed_targets,
-                        "model": "qwen",
-                        "status": "success"
-                    }
-                else:
-                    # 使用通用响应解析
-                    return format_api_response(content, targets, model_name="qwen")
-                
-            except Exception as request_error:
-                error_msg = f"发送qwen请求时出错: {str(request_error)}"
+            # 发送请求，使用重试机制
+            response = await call_api_with_retry(
+                "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+                headers=headers,
+                data=request_json.encode('utf-8'),
+                timeout=30.0
+            )
+            
+            # 检查响应状态
+            if response.status_code != 200:
+                error_msg = f"调用qwenAPI失败，状态码: {response.status_code}, 响应: {response.text}"
                 logger.error(error_msg)
-                traceback_info = traceback.format_exc()
-                logger.debug(f"qwen请求出错详细信息: {traceback_info}")
                 return format_api_response(None, targets, error=error_msg, model_name="qwen")
+            
+            # 解析响应
+            result_data = response.json()
+            
+            # 计算API调用时间
+            api_call_time = time.time() - api_start_time
+            logger.info(f"模型qwen API调用完成，耗时: {api_call_time:.2f}秒")
+            
+            # 提取响应内容
+            content = ""
+            raw_text = ""
+            
+            try:
+                # 处理嵌套结构
+                choices = result_data.get("output", {}).get("choices", [])
+                if choices and isinstance(choices, list) and len(choices) > 0:
+                    message = choices[0].get("message", {})
+                    message_content = message.get("content", [])
+                    if message_content and isinstance(message_content, list) and len(message_content) > 0:
+                        raw_text = message_content[0].get("text", "")
+                
+                # 使用raw_text，或者原始结果字符串
+                content = raw_text or str(result_data)
+                
+                # 尝试解析JSON内容
+                parsed_json = await ModelProcessor._parse_json_from_text(content)
+                
+                if parsed_json is not None:
+                    # 提取描述和目标
+                    description = parsed_json.get("description", content)
+                    parsed_targets = parsed_json.get("targets", [])
+                    
+                    # 如果成功解析了targets
+                    if parsed_targets:
+                        return {
+                            "description": description,
+                            "targets": parsed_targets,
+                            "model": "qwen",
+                            "status": "success",
+                            "timestamp": time.time()  # 添加时间戳确保排序
+                        }
+            except Exception as extract_error:
+                logger.error(f"提取Qwen响应内容时出错: {str(extract_error)}")
+                content = str(result_data)
+            
+            # 使用通用响应解析
+            return format_api_response(content, targets, model_name="qwen")
                 
         except Exception as api_error:
             error_msg = f"调用模型qwen API时出错: {str(api_error)}"
@@ -945,12 +1093,178 @@ class ModelProcessor:
             return format_api_response(None, targets, error=error_msg, model_name="qwen")
     
     @staticmethod
+    async def process_gemini(image_data, targets, system_message, user_message, start_time):
+        """处理Google Gemini模型的API调用"""
+        try:
+            # 获取Gemini配置
+            gemini_config = MODELS["gemini"]
+            api_key = gemini_config["api_key"]
+            model_name = gemini_config.get("name", "gemini-2.0-flash-exp")
+            proxy = GEMINI_CONFIG.get("proxy", {})
+            
+            # 记录API调用开始
+            api_start_time = time.time()
+            logger.info(f"开始调用Gemini模型API，时间: {api_start_time}")
+            
+            # 提取消息内容
+            text_content = await ModelProcessor._extract_user_message_text(user_message)
+            if not text_content:
+                text_content = await ModelProcessor._generate_default_query(targets)
+                logger.warning(f"无法从user_message提取文本内容，使用默认查询: {text_content}")
+            
+            system_content = await ModelProcessor._extract_system_message_text(system_message)
+            
+            # 使用更可靠的线程模式 - 注意这是一个普通函数，不是协程
+            def run_gemini_api():
+                # 导入google.generativeai库
+                import google.generativeai as genai
+                import os
+                
+                # 设置代理环境变量
+                original_http_proxy = os.environ.get('HTTP_PROXY')
+                original_https_proxy = os.environ.get('HTTPS_PROXY')
+                
+                try:
+                    # 应用代理设置（如果有）
+                    if proxy.get("http"):
+                        os.environ['HTTP_PROXY'] = proxy.get("http")
+                    if proxy.get("https"):
+                        os.environ['HTTPS_PROXY'] = proxy.get("https")
+                    
+                    # 配置API密钥
+                    genai.configure(api_key=api_key)
+                    
+                    # 创建临时图像文件 
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
+                        temp_path = temp_file.name
+                        # 将base64图像数据解码为二进制并写入临时文件
+                        image_binary = base64.b64decode(image_data)
+                        temp_file.write(image_binary)
+                    
+                    try:
+                        # 读取图像文件
+                        with open(temp_path, "rb") as img_file:
+                            image_data_bytes = img_file.read()
+                        
+                        # 构建更结构化的提示，请求输出JSON格式
+                        structured_prompt = f"{system_content}\n\n请分析图像中是否包含以下目标：{', '.join(targets)}\n\n{text_content}\n\n重要：请确保回答中明确标明每个目标的found状态为true或false，可以使用JSON格式返回结果。例如: {{\"description\": \"描述...\", \"targets\": [{{\"name\": \"目标名\", \"found\": true}}]}}"
+                        
+                        # 构建图像部分
+                        image_part = {
+                            "mime_type": "image/jpeg",
+                            "data": image_data_bytes
+                        }
+                        
+                        # 构建生成参数
+                        generation_config = {
+                            "temperature": gemini_config.get("temperature", 0.4),
+                            "top_p": gemini_config.get("top_p", 0.8),
+                            "top_k": gemini_config.get("top_k", 40),
+                            "max_output_tokens": gemini_config.get("max_output_tokens", 2048)
+                        }
+                        
+                        # 创建模型实例
+                        model = genai.GenerativeModel(
+                            model_name.split(':')[0] if ':' in model_name else model_name
+                        )
+                        
+                        # 调用模型进行图像分析，使用结构化提示
+                        response = model.generate_content(
+                            [structured_prompt, image_part],
+                            generation_config=generation_config
+                        )
+                        
+                        # 处理响应
+                        if hasattr(response, 'text'):
+                            return response.text
+                        elif hasattr(response, 'parts'):
+                            # 处理多部分响应
+                            return ''.join(part.text for part in response.parts if hasattr(part, 'text'))
+                        else:
+                            return str(response)
+                    finally:
+                        # 清理临时文件
+                        try:
+                            os.unlink(temp_path)
+                        except Exception as e:
+                            logger.warning(f"清理Gemini临时文件失败: {e}")
+                finally:
+                    # 恢复原始代理设置
+                    if original_http_proxy:
+                        os.environ['HTTP_PROXY'] = original_http_proxy
+                    elif 'HTTP_PROXY' in os.environ:
+                        del os.environ['HTTP_PROXY']
+                        
+                    if original_https_proxy:
+                        os.environ['HTTPS_PROXY'] = original_https_proxy
+                    elif 'HTTPS_PROXY' in os.environ:
+                        del os.environ['HTTPS_PROXY']
+            
+            # 使用run_in_thread函数进行线程调用
+            content = await run_in_thread(run_gemini_api)
+            
+            # 计算API调用时间
+            api_call_time = time.time() - api_start_time
+            logger.info(f"模型Gemini API调用完成，耗时: {api_call_time:.2f}秒")
+            
+            # 记录原始响应
+            logger.debug(f"Gemini API 原始返回: {content}")
+            
+            # 尝试解析JSON返回
+            parsed_json = await ModelProcessor._parse_json_from_text(content)
+            
+            if parsed_json is not None:
+                # 提取关键信息
+                description = parsed_json.get("description", content)
+                parsed_targets = parsed_json.get("targets", [])
+                
+                # 如果成功解析了targets
+                if parsed_targets:
+                    return {
+                        "description": description,
+                        "targets": parsed_targets,
+                        "model": "gemini",
+                        "status": "success",
+                        "timestamp": time.time()  # 添加时间戳确保排序
+                    }
+            
+            # 如果无法解析为JSON，或者没有找到targets数组，进行更多处理
+            # 使用更精细的解析机制，类似Qwen模型的处理方式
+            try:
+                # 提取内容部分，移除多余的格式信息
+                cleaned_content = content.strip()
+                
+                # 创建结构化的响应，就像Qwen那样
+                structured_response = {
+                    "description": cleaned_content,
+                    "targets": [],  # 将通过format_api_response填充
+                    "model": "gemini",
+                    "status": "success",
+                    "timestamp": time.time()
+                }
+                
+                # 使用format_api_response处理目标检测
+                return format_api_response(cleaned_content, targets, model_name="gemini")
+                
+            except Exception as parse_error:
+                logger.error(f"处理Gemini响应时出错: {str(parse_error)}")
+                return format_api_response(content, targets, model_name="gemini")  # 回退到简单处理
+                
+        except Exception as api_error:
+            logger.error(f"调用模型Gemini API时出错: {str(api_error)}")
+            traceback_info = traceback.format_exc()
+            logger.debug(f"调用Gemini出错详细信息: {traceback_info}")
+            return format_api_response(None, targets, error=f"{str(api_error)}", model_name="gemini")
+    
+    @staticmethod
     async def process_unsupported(model_name, targets, start_time):
         """处理尚未支持的模型"""
         content = f"模型{model_name}的响应处理尚未完成实现。检测到{len(targets)}个搜索目标。"
         return format_api_response(content, targets, model_name=model_name)
     
     @classmethod
+    @api_error_handler(status_code=500)
     async def process(cls, model_name, image, targets, start_time):
         """
         根据模型名称选择相应的处理方法
@@ -964,55 +1278,49 @@ class ModelProcessor:
         Returns:
             处理结果
         """
+        # 参数验证
+        if not model_name:
+            logger.warning("没有提供模型名称，使用默认模型")
+            model_name = "minimax"  # 默认使用minimax模型
+        
+        if not image:
+            logger.error("没有提供图像数据")
+            return format_api_response(None, targets, error="没有提供图像数据", model_name=model_name)
+        
+        # 处理搜索目标
+        if not targets or not isinstance(targets, list):
+            logger.warning("无效的搜索目标列表，使用默认目标")
+            targets = ["人物", "物体"]
+        
+        # 处理base64图像数据
         try:
-            # 参数验证
-            if not model_name:
-                logger.warning("没有提供模型名称，使用默认模型")
-                model_name = "minimax"  # 默认使用minimax模型
-                
-            if not image:
-                logger.error("没有提供图像数据")
-                return format_api_response(None, targets, error="没有提供图像数据", model_name=model_name)
-                
-            # 处理搜索目标
-            if not targets or not isinstance(targets, list):
-                logger.warning("无效的搜索目标列表，使用默认目标")
-                targets = ["人物", "物体"]
-                
-            # 处理base64图像数据
-            try:
-                image_data = image.split(',')[1] if ',' in image else image
-            except Exception as e:
-                logger.error(f"处理图像数据失败: {str(e)}")
-                return format_api_response(None, targets, error="图像数据格式无效", model_name=model_name)
-            
-            # 使用PromptGenerator生成提示词
-            try:
-                system_message, user_message = PromptGenerator.generate_messages(targets, model_name)
-            except Exception as e:
-                logger.error(f"生成提示词失败: {str(e)}")
-                # 创建默认消息
-                system_message = {"role": "system", "content": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。"}
-                target_text = "、".join(targets) if targets else "内容"
-                user_message = {
-                    "role": "user", 
-                    "content": [{"type": "text", "text": f"请分析图像中是否含有以下内容：{target_text}"}]
-                }
-            
-            # 根据模型选择处理方法
-            if model_name == "minimax":
-                return await cls.process_minimax(image_data, targets, system_message, user_message, start_time)
-            elif model_name == "qwen":
-                return await cls.process_qwen(image_data, targets, system_message, user_message, start_time)
-            else:
-                return await cls.process_unsupported(model_name, targets, start_time)
+            image_data = image.split(',')[1] if ',' in image else image
         except Exception as e:
-            logger.error(f"处理请求时出错: {str(e)}")
-            traceback_info = traceback.format_exc()
-            logger.debug(f"处理请求详细错误: {traceback_info}")
-            return format_api_response(None, targets if 'targets' in locals() else ["未知目标"], 
-                                     error=f"处理请求时出错: {str(e)}", 
-                                     model_name=model_name if 'model_name' in locals() else "unknown")
+            logger.error(f"处理图像数据失败: {str(e)}")
+            return format_api_response(None, targets, error="图像数据格式无效", model_name=model_name)
+        
+        # 使用PromptGenerator生成提示词
+        try:
+            system_message, user_message = PromptGenerator.generate_messages(targets, model_name)
+        except Exception as e:
+            logger.error(f"生成提示词失败: {str(e)}")
+            # 创建默认消息
+            system_message = {"role": "system", "content": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。"}
+            target_text = "、".join(targets) if targets else "内容"
+            user_message = {
+                "role": "user", 
+                "content": [{"type": "text", "text": f"请分析图像中是否含有以下内容：{target_text}"}]
+            }
+        
+        # 根据模型选择处理方法
+        if model_name == "minimax":
+            return await cls.process_minimax(image_data, targets, system_message, user_message, start_time)
+        elif model_name == "qwen":
+            return await cls.process_qwen(image_data, targets, system_message, user_message, start_time)
+        elif model_name == "gemini":
+            return await cls.process_gemini(image_data, targets, system_message, user_message, start_time)
+        else:
+            return await cls.process_unsupported(model_name, targets, start_time)
 
 # 添加全局变量来保存RTSP连接和视频流
 rtsp_cap = None
@@ -1031,8 +1339,109 @@ FRAME_WIDTH = 640  # 帧宽度，如果需要调整
 FRAME_HEIGHT = 360  # 帧高度，如果需要调整
 capture_task = None  # 异步捕获任务
 
+# RTSP帧获取通用函数
+@app.get("/api/rtsp/frame")
+@api_error_handler(status_code=500)
+async def get_rtsp_frame(source: str = "current"):
+    """
+    获取RTSP视频流的当前帧或截图
+    
+    Args:
+        source: 帧来源，"current"表示当前帧，"screenshot"表示截图帧
+        
+    Returns:
+        包含帧base64编码的响应
+    """
+    global rtsp_connected, output_frame, last_screenshot_frame
+    
+    async with lock:
+        # 根据来源选择使用的帧
+        if source == "screenshot":
+            frame = last_screenshot_frame
+        else:  # 默认使用当前帧
+            frame = output_frame
+            
+        if not rtsp_connected or frame is None:
+            return create_api_response(
+                status="error",
+                message="未连接到RTSP流或未获取到有效帧",
+                connected=False,
+                frame=None,
+                status_code=404
+            )
+        
+        # 将帧编码为base64字符串
+        success, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
+        if not success:
+            return create_api_response(
+                status="error",
+                message="无法编码视频帧",
+                connected=True,
+                frame=None,
+                status_code=500
+            )
+            
+        frame_base64 = base64.b64encode(buffer).decode('utf-8')
+        
+        return create_api_response(
+            status="success",
+            connected=True,
+            frame=f"data:image/jpeg;base64,{frame_base64}"
+        )
+
+# 保留原有截图API，但改为调用通用函数
+@app.get("/api/rtsp/screenshot/base64")
+async def get_rtsp_screenshot_base64():
+    """
+    获取RTSP视频流的最新截图(Base64编码)
+    
+    返回Base64编码的图像数据，适用于分析API
+    """
+    return await get_rtsp_frame(source="screenshot")
+
+# 添加RTSP截图路由
+@app.get("/api/rtsp/screenshot")
+@api_error_handler(status_code=500)
+async def get_rtsp_screenshot():
+    """
+    获取RTSP视频流的最新截图
+    
+    返回JPEG格式的图像数据
+    """
+    global rtsp_connected, last_screenshot_frame
+    
+    async with lock:
+        if not rtsp_connected or last_screenshot_frame is None:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "status": "error",
+                    "message": "截图不可用，RTSP流未连接或尚未获取到有效帧",
+                    "connected": False
+                }
+            )
+        
+        # 复制帧以避免并发修改问题
+        frame_copy = last_screenshot_frame.copy()
+        
+    # 将帧编码为JPEG图像
+    success, buffer = cv2.imencode('.jpg', frame_copy, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
+    if not success:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": "无法编码截图",
+                "connected": True
+            }
+        )
+        
+    # 返回JPEG图像
+    return Response(content=buffer.tobytes(), media_type="image/jpeg")
+
 # RTSP连接路由
 @app.post("/api/rtsp/connect")
+@api_error_handler(status_code=500)
 async def connect_rtsp(request: Request):
     """
     连接到RTSP视频流
@@ -1041,99 +1450,48 @@ async def connect_rtsp(request: Request):
     """
     global rtsp_cap, rtsp_url, rtsp_connected, rtsp_frame, rtsp_last_frame_time, capture_task
     
-    try:
-        # 解析请求数据
-        data = await request.json()
-        url = data.get("url", "")
-        
-        # 验证URL
-        if not url or not url.startswith("rtsp://"):
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "status": "error",
-                    "message": "无效的RTSP URL",
-                    "connected": False
-                }
-            )
-        
-        # 如果已经连接到相同的URL，直接返回成功
-        if rtsp_connected and rtsp_url == url and rtsp_cap is not None and rtsp_cap.isOpened():
-            return JSONResponse(
-                content={
-                    "status": "success",
-                    "message": "已经连接到该RTSP流",
-                    "connected": True
-                }
-            )
-        
-        # 如果之前有连接，先关闭
-        await disconnect_rtsp()
-        
-        # 重置连接状态
-        rtsp_connected = False
-        rtsp_frame = None
-        rtsp_last_frame_time = 0
-        
-        # 连接到新的RTSP URL
-        logger.info(f"尝试连接到RTSP流: {url}")
-        rtsp_url = url
-        
-        # 启动异步捕获任务
-        capture_task = asyncio.create_task(capture_frames())
-        
-        # 等待一段时间以确保能够成功连接
-        await asyncio.sleep(2)
-        
-        # 检查连接状态
-        if not rtsp_connected:
-            logger.error(f"无法连接到RTSP流: {url}")
-            if capture_task:
-                capture_task.cancel()
-                try:
-                    await capture_task
-                except asyncio.CancelledError:
-                    pass
-                capture_task = None
-                
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "status": "error",
-                    "message": "无法连接到RTSP流，请检查URL是否正确",
-                    "connected": False
-                }
-            )
-        
-        return JSONResponse(
-            content={
-                "status": "success",
-                "message": "成功连接到RTSP流",
-                "connected": True
-            }
-        )
-    except Exception as e:
-        logger.error(f"连接RTSP流时出错: {str(e)}")
-        traceback.print_exc()
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "message": f"连接RTSP流时出错: {str(e)}",
-                "connected": False
-            }
-        )
-
-# RTSP断开连接路由
-@app.post("/api/rtsp/disconnect")
-async def disconnect_rtsp():
-    """
-    断开RTSP视频流连接
-    """
-    global rtsp_cap, rtsp_url, rtsp_connected, rtsp_frame, capture_task
+    # 解析请求数据
+    data = await request.json()
+    url = data.get("url", "")
     
-    try:
-        # 取消捕获任务
+    # 验证URL
+    if not url or not url.startswith("rtsp://"):
+        return create_api_response(
+            status="error",
+            message="无效的RTSP URL",
+            connected=False,
+            status_code=400
+        )
+    
+    # 如果已经连接到相同的URL，直接返回成功
+    if rtsp_connected and rtsp_url == url and rtsp_cap is not None and rtsp_cap.isOpened():
+        return create_api_response(
+            status="success",
+            message="已经连接到该RTSP流",
+            connected=True
+        )
+    
+    # 如果之前有连接，先关闭
+    await disconnect_rtsp()
+    
+    # 重置连接状态
+    rtsp_connected = False
+    rtsp_frame = None
+    rtsp_last_frame_time = 0
+    
+    # 连接到新的RTSP URL
+    logger.info(f"尝试连接到RTSP流: {url}")
+    rtsp_url = url
+    
+    # 启动异步捕获任务
+    capture_task = asyncio.create_task(capture_frames())
+    
+    # 等待一段时间以确保能够成功连接
+    await asyncio.sleep(2)
+    
+    # 检查连接状态
+    if not rtsp_connected:
+        logger.error(f"无法连接到RTSP流: {url}")
         if capture_task:
             capture_task.cancel()
             try:
@@ -1142,129 +1500,72 @@ async def disconnect_rtsp():
                 pass
             capture_task = None
             
-        # 关闭视频捕获对象
-        if rtsp_cap is not None:
-            # 简化为直接调用，避免try嵌套
-            await run_in_thread(lambda: rtsp_cap.release())
-            logger.info("视频捕获对象已释放")
-            rtsp_cap = None
-        
-        # 添加短暂延迟，尝试允许底层资源完全释放
-        await asyncio.sleep(0.1)
-        
-        # 重置状态变量
-        rtsp_url = None
-        rtsp_connected = False
-        rtsp_frame = None
-        
-        return JSONResponse(
-            content={
-                "status": "success",
-                "message": "成功断开RTSP连接",
-                "connected": False
-            }
-        )
-    except Exception as e:
-        logger.error(f"断开RTSP连接时出错: {str(e)}")
-        traceback.print_exc()
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "message": f"断开RTSP连接时出错: {str(e)}",
-                "connected": False
-            }
-        )
+    return create_api_response(
+        status="error",
+        message="无法连接到RTSP流，请检查URL是否正确",
+        connected=False,
+        status_code=500
+    )
+
+# RTSP断开连接路由
+@app.post("/api/rtsp/disconnect")
+@api_error_handler(status_code=500)
+async def disconnect_rtsp():
+    """
+    断开RTSP视频流连接
+    """
+    global rtsp_cap, rtsp_url, rtsp_connected, rtsp_frame, capture_task
+    
+    # 取消捕获任务
+    if capture_task:
+        capture_task.cancel()
+        try:
+            await capture_task
+        except asyncio.CancelledError:
+            pass
+        capture_task = None
+    
+    # 关闭视频捕获对象
+    if rtsp_cap is not None:
+        # 简化为直接调用，避免try嵌套
+        await run_in_thread(lambda: rtsp_cap.release())
+        logger.info("视频捕获对象已释放")
+        rtsp_cap = None
+    
+    # 添加短暂延迟，尝试允许底层资源完全释放
+    await asyncio.sleep(0.1)
+    
+    # 重置状态变量
+    rtsp_url = None
+    rtsp_connected = False
+    rtsp_frame = None
+    
+    return create_api_response(
+        status="success",
+        message="成功断开RTSP连接",
+        connected=False
+    )
 
 # RTSP状态检查路由
 @app.get("/api/rtsp/status")
+@api_error_handler(status_code=500)
 async def check_rtsp_status():
     """
     检查RTSP连接状态
     """
     global rtsp_cap, rtsp_url, rtsp_connected
     
-    try:
-        if rtsp_cap is not None and rtsp_connected:
-            is_opened = await run_in_thread(lambda: rtsp_cap.isOpened())
-            if not is_opened:
-                rtsp_connected = False
-                
-        return JSONResponse(
-            content={
-                "status": "success",
-                "connected": rtsp_connected,
-                "url": rtsp_url if rtsp_connected else None,
-                "last_frame_time": rtsp_last_frame_time if rtsp_connected else 0
-            }
-        )
-    except Exception as e:
-        logger.error(f"检查RTSP状态时出错: {str(e)}")
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "message": f"检查RTSP状态时出错: {str(e)}",
-                "connected": False
-            }
-        )
-
-# RTSP帧获取路由
-@app.get("/api/rtsp/frame")
-async def get_rtsp_frame():
-    """
-    获取RTSP视频流的当前帧
-    """
-    global rtsp_connected, output_frame
+    if rtsp_cap is not None and rtsp_connected:
+        is_opened = await run_in_thread(lambda: rtsp_cap.isOpened())
+        if not is_opened:
+            rtsp_connected = False
     
-    try:
-        async with lock:
-            if not rtsp_connected or output_frame is None:
-                return JSONResponse(
-                    status_code=404,
-                    content={
-                        "status": "error",
-                        "message": "未连接到RTSP流或未获取到有效帧",
-                        "connected": False,
-                        "frame": None
-                    }
-                )
-            
-            # 将帧编码为base64字符串
-            success, buffer = cv2.imencode('.jpg', output_frame, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
-            if not success:
-                return JSONResponse(
-                    status_code=500,
-                    content={
-                        "status": "error",
-                        "message": "无法编码视频帧",
-                        "connected": True,
-                        "frame": None
-                    }
-                )
-                
-            frame_base64 = base64.b64encode(buffer).decode('utf-8')
-            
-            return JSONResponse(
-                content={
-                    "status": "success",
-                    "connected": True,
-                    "frame": f"data:image/jpeg;base64,{frame_base64}",
-                    "timestamp": time.time()
-                }
-            )
-    except Exception as e:
-        logger.error(f"获取RTSP帧时出错: {str(e)}")
-        traceback.print_exc()
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "message": f"获取RTSP帧时出错: {str(e)}",
-                "connected": False,
-                "frame": None
-            }
-        )
+    return create_api_response(
+        status="success",
+        connected=rtsp_connected,
+        url=rtsp_url if rtsp_connected else None,
+        last_frame_time=rtsp_last_frame_time if rtsp_connected else 0
+    )
 
 # 新增MJPEG流端点
 @app.get("/api/rtsp/stream")
@@ -1436,122 +1737,6 @@ async def generate_video_stream():
                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
     except Exception as e:
         logger.error(f"生成最终帧时出错: {str(e)}")
-
-# RTSP截图获取路由
-@app.get("/api/rtsp/screenshot")
-async def get_rtsp_screenshot():
-    """
-    获取RTSP视频流的最新截图
-    
-    返回JPEG格式的图像数据
-    """
-    global rtsp_connected, last_screenshot_frame
-    
-    try:
-        async with lock:
-            if not rtsp_connected or last_screenshot_frame is None:
-                return JSONResponse(
-                    status_code=404,
-                    content={
-                        "status": "error",
-                        "message": "截图不可用，RTSP流未连接或尚未获取到有效帧",
-                        "connected": False
-                    }
-                )
-            
-            # 复制帧以避免并发修改问题
-            frame_copy = last_screenshot_frame.copy()
-            
-        # 将帧编码为JPEG图像
-        success, buffer = cv2.imencode('.jpg', frame_copy, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
-        if not success:
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "status": "error",
-                    "message": "无法编码截图",
-                    "connected": True
-                }
-            )
-            
-        # 返回JPEG图像
-        return Response(content=buffer.tobytes(), media_type="image/jpeg")
-    
-    except Exception as e:
-        logger.error(f"获取RTSP截图时出错: {str(e)}")
-        traceback.print_exc()
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "message": f"获取RTSP截图时出错: {str(e)}",
-                "connected": False
-            }
-        )
-
-# RTSP截图获取路由(Base64编码版本，用于分析)
-@app.get("/api/rtsp/screenshot/base64")
-async def get_rtsp_screenshot_base64():
-    """
-    获取RTSP视频流的最新截图(Base64编码)
-    
-    返回Base64编码的图像数据，适用于分析API
-    """
-    global rtsp_connected, last_screenshot_frame
-    
-    try:
-        async with lock:
-            if not rtsp_connected or last_screenshot_frame is None:
-                return JSONResponse(
-                    status_code=404,
-                    content={
-                        "status": "error",
-                        "message": "截图不可用，RTSP流未连接或尚未获取到有效帧",
-                        "connected": False,
-                        "image": None
-                    }
-                )
-            
-            # 复制帧以避免并发修改问题
-            frame_copy = last_screenshot_frame.copy()
-            
-        # 将帧编码为JPEG图像，然后转换为Base64
-        success, buffer = cv2.imencode('.jpg', frame_copy, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
-        if not success:
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "status": "error",
-                    "message": "无法编码截图",
-                    "connected": True,
-                    "image": None
-                }
-            )
-            
-        # 转换为Base64并返回
-        frame_base64 = base64.b64encode(buffer).decode('utf-8')
-        
-        return JSONResponse(
-            content={
-                "status": "success",
-                "connected": True,
-                "image": f"data:image/jpeg;base64,{frame_base64}",
-                "timestamp": time.time()
-            }
-        )
-    
-    except Exception as e:
-        logger.error(f"获取RTSP Base64截图时出错: {str(e)}")
-        traceback.print_exc()
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "message": f"获取RTSP Base64截图时出错: {str(e)}",
-                "connected": False,
-                "image": None
-            }
-        )
 
 if __name__ == "__main__":
     import uvicorn
