@@ -1045,14 +1045,27 @@
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="modelDropdown">
                             <li>
-                                <a class="dropdown-item model-dropdown-item" href="#" onclick="selectModel('llama')" id="llama-dropdown-item">
+                                <a class="dropdown-item model-dropdown-item" href="#" onclick="selectModel('qwen')" id="qwen-dropdown-item">
                                     <div class="d-flex align-items-center">
                                         <div class="dropdown-icon-container">
-                                            <i class="bi bi-robot"></i>
+                                            <i class="bi bi-cloud"></i>
                                         </div>
                                         <div>
-                                            <div class="dropdown-model-title">Llama2-Vision</div>
-                                            <div class="dropdown-model-description">本地部署视觉语言模型</div>
+                                            <div class="dropdown-model-title">Qwen2.5-VL</div>
+                                            <div class="dropdown-model-description">阿里通义千问视觉模型</div>
+                                        </div>
+                                    </div>
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item model-dropdown-item" href="#" onclick="selectModel('douban')" id="douban-dropdown-item">
+                                    <div class="d-flex align-items-center">
+                                        <div class="dropdown-icon-container">
+                                            <i class="bi bi-fire"></i>
+                                        </div>
+                                        <div>
+                                            <div class="dropdown-model-title">豆包</div>
+                                            <div class="dropdown-model-description">火山引擎视觉分析模型</div>
                                         </div>
                                     </div>
                                 </a>
@@ -1084,14 +1097,14 @@
                                 </a>
                             </li>
                             <li>
-                                <a class="dropdown-item model-dropdown-item" href="#" onclick="selectModel('qwen')" id="qwen-dropdown-item">
+                                <a class="dropdown-item model-dropdown-item" href="#" onclick="selectModel('kimi')" id="kimi-dropdown-item">
                                     <div class="d-flex align-items-center">
                                         <div class="dropdown-icon-container">
-                                            <i class="bi bi-cloud"></i>
+                                            <i class="bi bi-robot"></i>
                                         </div>
                                         <div>
-                                            <div class="dropdown-model-title">Qwen2.5-VL</div>
-                                            <div class="dropdown-model-description">阿里通义千问视觉模型</div>
+                                            <div class="dropdown-model-title">Kimi</div>
+                                            <div class="dropdown-model-description">Moonshot AI 多模态模型</div>
                                         </div>
                                     </div>
                                 </a>
@@ -1113,12 +1126,21 @@
                 </h5>
                 <div class="row g-2">
                     <div class="col-md-3 col-sm-6">
-                        <div class="model-card" onclick="selectModel('llama')" id="llama-model">
+                        <div class="model-card" onclick="selectModel('qwen')" id="qwen-model">
                             <div class="model-icon">
-                                <i class="bi bi-robot"></i>
+                                <i class="bi bi-cloud"></i>
                             </div>
-                            <div class="model-title">Llama2-Vision</div>
-                            <div class="model-description">本地部署视觉语言模型</div>
+                            <div class="model-title">Qwen2.5-VL</div>
+                            <div class="model-description">阿里通义千问视觉模型</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <div class="model-card" onclick="selectModel('douban')" id="douban-model">
+                            <div class="model-icon">
+                                <i class="bi bi-fire"></i>
+                            </div>
+                            <div class="model-title">豆包</div>
+                            <div class="model-description">火山引擎视觉分析模型</div>
                         </div>
                     </div>
                     <div class="col-md-3 col-sm-6">
@@ -1140,12 +1162,12 @@
                         </div>
                     </div>
                     <div class="col-md-3 col-sm-6">
-                        <div class="model-card" onclick="selectModel('qwen')" id="qwen-model">
+                        <div class="model-card" onclick="selectModel('kimi')" id="kimi-model">
                             <div class="model-icon">
-                                <i class="bi bi-cloud"></i>
+                                <i class="bi bi-robot"></i>
                             </div>
-                            <div class="model-title">Qwen2.5-VL</div>
-                            <div class="model-description">阿里通义千问视觉模型</div>
+                            <div class="model-title">Kimi</div>
+                            <div class="model-description">Moonshot AI's multimodal model with strong visual understanding capabilities.</div>
                         </div>
                     </div>
                 </div>
@@ -1393,7 +1415,7 @@
             maxFileSize: 100 * 1024 * 1024, // 100MB
             validVideoTypes: ['video/mp4', 'video/avi', 'video/quicktime', 'video/x-matroska'],
             alertDuration: 3000, // 延长提示窗口显示时间，从500ms改为3000ms
-            defaultModel: 'llama',
+            defaultModel: 'qwen',
             defaultFrameInterval: 2,
             minFrameInterval: 0.5,
             maxFrameInterval: 10,
@@ -1423,8 +1445,9 @@
                 api_key: "195647d0-b531-42ef-a467-fa036b35ad7f",
                 base_url: "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
             },
-            ollama: {
-                base_url: "http://localhost:11434"
+            kimi: {
+                api_key: "", // Will be filled from environment variable
+                base_url: "https://api.moonshot.cn/v1"
             }
         };
 
@@ -1501,10 +1524,48 @@
                 return size <= CONFIG.maxFileSize;
             },
 
+            // 安全地创建和跟踪blob URL
+            createSafeBlobURL(blob) {
+                try {
+                    const url = URL.createObjectURL(blob);
+                    // 确保blobUrls数组存在
+                    if (!state.blobUrls) {
+                        state.blobUrls = [];
+                    }
+                    // 跟踪创建的URL以便以后清理
+                    state.blobUrls.push(url);
+                    console.log(`创建Blob URL: ${url.substr(0, 30)}...`);
+                    return url;
+                } catch (error) {
+                    console.error('创建Blob URL时出错:', error);
+                    return null;
+                }
+            },
+            
+            // 安全地释放blob URL
+            revokeBlobURL(url) {
+                if (!url) return;
+                
+                try {
+                    URL.revokeObjectURL(url);
+                    console.log(`释放Blob URL: ${url.substr(0, 30)}...`);
+                    
+                    // 从跟踪数组中移除
+                    if (state.blobUrls) {
+                        const index = state.blobUrls.indexOf(url);
+                        if (index !== -1) {
+                            state.blobUrls.splice(index, 1);
+                        }
+                    }
+                } catch (error) {
+                    console.error('释放Blob URL时出错:', error);
+                }
+            },
+            
             clearVideoResource() {
                 try {
                     if (state.currentVideoURL) {
-                        URL.revokeObjectURL(state.currentVideoURL);
+                        this.revokeBlobURL(state.currentVideoURL);
                         state.currentVideoURL = null;
                     }
                 } catch (error) {
@@ -1576,7 +1637,7 @@
                 }
                 
                 // 如果有大量的帧，清理旧的帧数据
-                if (state.streamExtractedFrames.length > 100) {
+                if (state.streamExtractedFrames && state.streamExtractedFrames.length > 100) {
                     console.log("清理未使用的帧缓存以释放内存");
                     
                     // 找出分析过的帧索引
@@ -1591,17 +1652,46 @@
                     const currentIndex = analysisController.currentFrameIndex;
                     const buffer = 10; // 前后各保留10帧
                     
-                    const optimizedFrames = state.streamExtractedFrames.filter((frame, index) => {
-                        return analyzedFrameIndexes.has(index) || 
-                               (index >= currentIndex - buffer && index <= currentIndex + buffer);
+                    // 记录要移除的帧 
+                    const framesToRemove = [];
+                    const framesToKeep = [];
+                    
+                    state.streamExtractedFrames.forEach((frame, index) => {
+                        if (analyzedFrameIndexes.has(index) || 
+                            (index >= currentIndex - buffer && index <= currentIndex + buffer)) {
+                            framesToKeep.push(frame);
+                        } else {
+                            framesToRemove.push(frame);
+                        }
                     });
                     
-                    console.log(`内存优化：从 ${state.streamExtractedFrames.length} 帧减少到 ${optimizedFrames.length} 帧`);
-                    
-                    // 更新帧数组
-                    if (optimizedFrames.length > 0) {
-                        state.streamExtractedFrames = optimizedFrames;
+                    // 如果需要移除帧，记录日志
+                    if (framesToRemove.length > 0) {
+                        console.log(`内存优化：从 ${state.streamExtractedFrames.length} 帧减少到 ${framesToKeep.length} 帧，移除 ${framesToRemove.length} 帧`);
+                        
+                        // 更新帧数组
+                        if (framesToKeep.length > 0) {
+                            state.streamExtractedFrames = framesToKeep;
+                        }
+                        
+                        // 帮助浏览器释放内存
+                        setTimeout(() => {
+                            framesToRemove.length = 0; // 清空数组
+                        }, 100);
                     }
+                }
+                
+                // 清理可能存在的其他Blob URLs
+                if (state.blobUrls && state.blobUrls.length > 0) {
+                    console.log(`清理 ${state.blobUrls.length} 个未使用的Blob URLs`);
+                    state.blobUrls.forEach(url => {
+                        try {
+                            URL.revokeObjectURL(url);
+                        } catch (e) {
+                            console.warn('撤销Blob URL时出错:', e);
+                        }
+                    });
+                    state.blobUrls = [];
                 }
                 
                 // 主动触发垃圾回收
@@ -1695,9 +1785,9 @@
                         let modelName = '模型';
                         
                         switch(model) {
-                            case 'llama':
+                            case 'kimi':
                                 icon = 'bi-robot';
-                                modelName = 'Llama2-Vision';
+                                modelName = 'Kimi';
                                 break;
                             case 'gemini':
                                 icon = 'bi-google';
@@ -1710,6 +1800,10 @@
                             case 'qwen':
                                 icon = 'bi-cloud';
                                 modelName = 'Qwen2.5-VL';
+                                break;
+                            case 'douban':
+                                icon = 'bi-fire';
+                                modelName = '豆包';
                                 break;
                         }
                         
@@ -1727,7 +1821,7 @@
                 try {
                     this.cleanupVideoPreview();
                     
-                    state.currentVideoURL = URL.createObjectURL(file);
+                    state.currentVideoURL = utils.createSafeBlobURL(file);
                     elements.videoPreview.src = state.currentVideoURL;
                     
                     elements.dropZone.classList.add('has-video');
@@ -1808,7 +1902,7 @@
             initializeFrameExtraction(file) {
                 try {
                     const video = document.createElement('video');
-                    video.src = URL.createObjectURL(file);
+                    video.src = utils.createSafeBlobURL(file);
                     
                     video.onloadedmetadata = () => {
                         // 在视频数据加载完成后计算总帧数
@@ -1856,56 +1950,86 @@
                     // 初始帧索引和提取计数器
                     let currentIndex = 0;
                     
+                    // 存储视频源以确保在整个过程中有效
+                    const videoSrc = video.src;
+                    
                     const extractFrame = (time) => {
                         // 确保不超过视频总长度
                         if (time >= duration) {
                             console.log(`画面抽取完成，共抽取${state.streamExtractedFrames.length}帧，间隔${interval}秒`);
                             uiController.showAlert('info', `抽取完成`);
-                            URL.revokeObjectURL(video.src);
+                            // 确保在最后释放资源
+                            setTimeout(() => {
+                                utils.revokeBlobURL(videoSrc);
+                                console.log('已释放视频Blob URL');
+                            }, 500);
                             return;
                         }
 
-                        video.currentTime = time;
+                        // 检查视频是否还在有效状态
+                        if (video.readyState === 0) {
+                            console.error('视频元素已失效，无法继续提取帧');
+                            uiController.showAlert('error', '视频处理失败');
+                            URL.revokeObjectURL(videoSrc);
+                            return;
+                        }
+
+                        try {
+                            video.currentTime = time;
+                        } catch (e) {
+                            console.error('设置视频时间失败:', e);
+                            uiController.showAlert('error', '视频处理失败');
+                            URL.revokeObjectURL(videoSrc);
+                            return;
+                        }
                         
                         video.onseeked = () => {
-                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            
-                            const frameDataUrl = canvas.toDataURL('image/jpeg', CONFIG.frameQuality);
-                            
-                            // 记录精确的当前时间点
-                            const exactTime = video.currentTime;
-                            console.log(`抽取帧 #${state.currentFrameIndex + 1}，时间点: ${exactTime.toFixed(2)}秒`);
-                            
-                            state.streamExtractedFrames.push({
-                                time: exactTime, // 使用精确的时间点
-                                dataUrl: frameDataUrl
-                            });
-                            
-                            state.currentFrameIndex++;
-                            currentIndex++;
-                            
-                            // 处理下一帧
-                            if (currentIndex < totalFrames) {
-                                // 获取每次处理帧时的最新间隔值
-                                const currentInterval = this.getFrameInterval();
+                            try {
+                                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                                 
-                                // 下一帧的时间点，严格按照当前间隔增加
-                                const nextTime = currentIndex * currentInterval;
+                                const frameDataUrl = canvas.toDataURL('image/jpeg', CONFIG.frameQuality);
                                 
-                                // 检查是否超出视频长度
-                                if (nextTime < duration) {
-                                    // 记录正在使用的间隔
-                                    console.log(`继续抽帧，使用当前间隔: ${currentInterval}秒`);
-                                    setTimeout(() => extractFrame(nextTime), 100);
+                                // 记录精确的当前时间点
+                                const exactTime = video.currentTime;
+                                console.log(`抽取帧 #${state.currentFrameIndex + 1}，时间点: ${exactTime.toFixed(2)}秒`);
+                                
+                                state.streamExtractedFrames.push({
+                                    time: exactTime, // 使用精确的时间点
+                                    dataUrl: frameDataUrl,
+                                    extracted: new Date().getTime() // 添加提取时间戳
+                                });
+                                
+                                state.currentFrameIndex++;
+                                currentIndex++;
+                                
+                                // 处理下一帧
+                                if (currentIndex < totalFrames) {
+                                    // 获取每次处理帧时的最新间隔值
+                                    const currentInterval = this.getFrameInterval();
+                                    
+                                    // 下一帧的时间点，严格按照当前间隔增加
+                                    const nextTime = currentIndex * currentInterval;
+                                    
+                                    // 检查是否超出视频长度
+                                    if (nextTime < duration) {
+                                        // 记录正在使用的间隔
+                                        console.log(`继续抽帧，使用当前间隔: ${currentInterval}秒`);
+                                        // 使用requestAnimationFrame而不是setTimeout以获得更好的性能
+                                        requestAnimationFrame(() => setTimeout(() => extractFrame(nextTime), 50));
+                                    } else {
+                                        console.log(`画面抽取完成，共抽取${state.streamExtractedFrames.length}帧`);
+                                        uiController.showAlert('info', `抽取完成`);
+                                        setTimeout(() => utils.revokeBlobURL(videoSrc), 500);
+                                    }
                                 } else {
                                     console.log(`画面抽取完成，共抽取${state.streamExtractedFrames.length}帧`);
                                     uiController.showAlert('info', `抽取完成`);
-                                    URL.revokeObjectURL(video.src);
+                                    setTimeout(() => utils.revokeBlobURL(videoSrc), 500);
                                 }
-                            } else {
-                                console.log(`画面抽取完成，共抽取${state.streamExtractedFrames.length}帧`);
-                                uiController.showAlert('info', `抽取完成`);
-                                URL.revokeObjectURL(video.src);
+                            } catch (e) {
+                                console.error('处理视频帧时出错:', e);
+                                // 出错时也要释放资源
+                                setTimeout(() => utils.revokeBlobURL(videoSrc), 500);
                             }
                         };
                     };
@@ -2379,7 +2503,7 @@
                     // 仅用于人类查看的JSON格式
                     console.log("API返回序列化JSON:", JSON.stringify(result, null, 2));
 
-                    // 添加处理不同类型found值的逻辑
+                    // 添加处理不同类型found值的逻辑 - 增强版
                     const processedTargets = validTargets.map(target => {
                         if (!target) return null;
                         
@@ -2388,33 +2512,55 @@
                         const originalValue = target.found;
                         const originalType = typeof originalValue;
                         
-                        // 显示原始值信息
-                        console.log(`目标 "${target.name}" 原始found值: ${originalValue} (${originalType})`);
+                        // 更详细地记录原始值信息
+                        console.log(`目标 "${target.name}" 原始found值: ${originalValue} (${originalType}), JSON序列化: ${JSON.stringify(originalValue)}`);
                         
-                        // 转换为布尔值
+                        // 强制转换为布尔值 - 使用严格比较
+                        let boolValue;
                         if (originalType === 'boolean') {
                             // 已经是布尔值
-                            processed.isFound = originalValue;
-                        } else if (originalValue === 'True' || originalValue === 'true' || originalValue === 1) {
+                            boolValue = originalValue === true;
+                        } else if (originalValue === 'True' || originalValue === 'true' || originalValue === 1 || originalValue === '1') {
                             // 处理字符串"True"或数字1
-                            processed.isFound = true;
-                        } else if (originalValue === 'False' || originalValue === 'false' || originalValue === 0) {
-                            // 处理字符串"False"或数字0
-                            processed.isFound = false;
+                            boolValue = true;
+                        } else if (originalValue === 'False' || originalValue === 'false' || originalValue === 0 || originalValue === '0' || originalValue === null || originalValue === undefined) {
+                            // 处理字符串"False"、数字0或null/undefined
+                            boolValue = false;
                         } else {
-                            // 其他值，直接使用Boolean()转换
-                            processed.isFound = Boolean(originalValue);
+                            // 其他值，使用严格的显式转换，默认为false
+                            console.warn(`目标 "${target.name}" 有不明确的found值: ${originalValue}，默认设置为false`);
+                            boolValue = false;
                         }
                         
+                        // 显式删除原有的found和isFound属性，以避免属性访问问题
+                        delete processed.found;
+                        delete processed.isFound;
+                        
+                        // 重新添加found和isFound属性
+                        Object.defineProperties(processed, {
+                            'found': {
+                                value: boolValue,
+                                writable: true,
+                                enumerable: true,
+                                configurable: true
+                            },
+                            'isFound': {
+                                value: boolValue,
+                                writable: true,
+                                enumerable: true,
+                                configurable: true
+                            }
+                        });
+                        
                         // 记录转换后的值
-                        console.log(`目标 "${target.name}" 处理后found值: ${processed.isFound} (boolean)`);
+                        console.log(`目标 "${target.name}" 处理后found值: ${boolValue} (${typeof boolValue})`);
                         
                         return processed;
                     }).filter(t => t !== null);
                     
                     // 分类为找到和未找到的目标
-                    const foundTargets = processedTargets.filter(t => t.isFound === true);
-                    const notFoundTargets = processedTargets.filter(t => t.isFound === false);
+                    const foundTargets = processedTargets.filter(t => t.found === true);
+                    const notFoundTargets = processedTargets.filter(t => t.found === false);
                     
                     // 输出分类结果
                     console.log(`✅ 找到的目标 (${foundTargets.length}):`, 
@@ -2433,6 +2579,11 @@
                         );
                     }
 
+                    // 在渲染前记录每个目标的状态 - 帮助调试
+                    processedTargets.forEach(target => {
+                        console.log(`渲染前目标 "${target.name}" found值: ${target.found} (${typeof target.found})`);
+                    });
+                    
                     return `
                         <div class="result-item">
                             <div class="result-header">
@@ -2446,18 +2597,21 @@
                                 <div class="result-info">
                                     <div class="result-description">${result.description}</div>
                                     <div class="result-targets">
-                                        ${foundTargets.map(target => `
-                                            <span class="target-tag found">
+                                        ${processedTargets.map(target => {
+                                            // 直接检查布尔值，避免使用可能有问题的对象属性访问
+                                            const isFound = target.found === true;
+                                            console.log(`渲染目标: ${target.name}, found=${target.found}, isFound=${isFound}`);
+                                            
+                                            return isFound ? 
+                                            `<span class="target-tag found">
                                                 <i class="bi bi-check-circle"></i>
                                                 ${target.name}
-                                            </span>
-                                        `).join('')}
-                                        ${notFoundTargets.map(target => `
-                                            <span class="target-tag not-found">
+                                            </span>` : 
+                                            `<span class="target-tag not-found">
                                                 <i class="bi bi-x-circle"></i>
                                                 ${target.name}
-                                            </span>
-                                        `).join('')}
+                                            </span>`;
+                                        }).join('')}
                                     </div>
                                 </div>
                             </div>
@@ -2719,8 +2873,10 @@
                     
                     if (this.isAnalyzing) {
                         console.log("所有帧分析完成");
-                        uiController.showAlert('info', '分析完成');
-                        this.stopAnalysis();
+                        // 直接使用total frames作为帧数，确保显示正确的帧数
+                        const totalFrames = state.streamExtractedFrames.length;
+                        uiController.showAlert('info', `分析完成 ${totalFrames}帧`);
+                        this.stopAnalysis(false); // 传入false参数表示不再显示分析完成信息
                     }
                 } catch (error) {
                     console.error("批处理过程中出错:", error);
@@ -3044,7 +3200,7 @@
                 }
             },
             
-            stopAnalysis() {
+            stopAnalysis(showCompletionMessage = true) {
                 this.isAnalyzing = false;
                 this.processingQueue = [];
                 
@@ -3062,9 +3218,11 @@
                 elements.analyzeBtn.innerHTML = '<i class="bi bi-play-fill"></i> 开始分析';
                 elements.stopAnalyzeBtn.style.display = 'none'; // 隐藏停止按钮
                 
-                if (this.currentFrameIndex > 0) {
+                // 只有当showCompletionMessage为true时才显示分析完成信息
+                if (showCompletionMessage && this.currentFrameIndex > 0) {
                     if (state.hasUploadedVideo) {
-                        uiController.showAlert('info', `分析完成 ${this.currentFrameIndex}帧`);
+                        // 修正帧计数：currentFrameIndex是从0开始的索引，实际帧数为索引+1
+                        uiController.showAlert('info', `分析完成 ${this.currentFrameIndex + 1}帧`);
                     } else if (state.localCameraActive) { // 本地摄像头
                         uiController.showAlert('info', '实时视频分析已停止');
                     } else if (state.ipCameraActive) { // 网络摄像头

@@ -38,39 +38,23 @@ class PromptGenerator:
             
             # 不同模型的提示词模板
             prompt_templates = {
-                "minimax": base_prompt + """。请详细分析图像内容，提供有用的信息来回答用户问题。保持回答简洁明了。""",
+                "minimax": base_prompt + "。请详细分析图像内容，提供有用的信息来回答用户问题。保持回答简洁明了。",
                 "gemini": base_prompt + "。请详细分析图像并提供信息丰富的回答。",
-                "qwen": base_prompt + """。请详细分析图像内容并提供专业的回答。""",
-                "llama": base_prompt + "。请分析图像并给出详细回答。"
+                "qwen": base_prompt + "。请详细分析图像内容并提供专业的回答。",
+                "llama": base_prompt + "。请分析图像并给出详细回答。",
+                "douban": base_prompt + "。请详细分析图像内容并提供专业的回答。"
             }
         else:
             # 原有的目标搜索模式
             base_prompt = f"分析图片是否包含: {', '.join(targets)}。"
-        
+            
             # 不同模型的提示词模板
             prompt_templates = {
-                "minimax": base_prompt + """请用JSON格式返回分析结果，格式如下:
-{
-  "targets": [
-    {"name": "目标1", "found": true/false},
-    {"name": "目标2", "found": true/false}
-  ],
-  "description": "对图像的简短描述"
-}
-在targets数组中，必须包含我指定的每个目标，found字段必须是布尔值true或false。不要使用不同的JSON结构。""",
-                "gemini": base_prompt + "返回JSON格式:{'targets':[{'name':'目标名','found':true/false}],'description':'对图像的简短描述'}",
-                "qwen": base_prompt + """请用JSON格式返回分析结果，格式如下:
-{
-  "targets": [
-    {"name": "目标1", "found": true/false},
-    {"name": "目标2", "found": true/false}
-    ...
-  ],
-  "description": "对图像的简短描述"
-}
-在targets数组中，必须包含我指定的每个目标，found字段必须是布尔值true或false。
-不要使用不同的JSON结构，确保严格按照以上格式回复，不要有任何前缀或后缀解释。""",
-                "llama": base_prompt + "返回JSON格式:{'targets':[{'name':'目标名','found':true/false}],'description':'对图像的简短描述'}"
+                "minimax": base_prompt + "请用JSON格式返回分析结果，格式如下: {\"targets\": [{\"name\": \"目标1\", \"found\": true/false}], \"description\": \"对图像的简短描述\"}。在targets数组中，必须包含我指定的每个目标，found字段必须是布尔值true或false。不要使用不同的JSON结构。",
+                "gemini": base_prompt + "返回JSON格式:{\"targets\":[{\"name\":\"目标名\",\"found\":true/false}],\"description\":\"对图像的简短描述\"}",
+                "qwen": base_prompt + "请用JSON格式返回分析结果，格式如下: {\"targets\": [{\"name\": \"目标1\", \"found\": true/false}], \"description\": \"对图像的简短描述\"}。在targets数组中，必须包含我指定的每个目标，found字段必须是布尔值true或false。不要使用不同的JSON结构，确保严格按照以上格式回复，不要有任何前缀或后缀解释。",
+                "llama": base_prompt + "返回JSON格式:{\"targets\":[{\"name\":\"目标名\",\"found\":true/false}],\"description\":\"对图像的简短描述\"}",
+                "douban": base_prompt + "请用JSON格式返回分析结果，格式如下: {\"targets\": [{\"name\": \"目标1\", \"found\": true/false}], \"description\": \"对图像的简短描述\"}。在targets数组中，必须包含我指定的每个目标，found字段必须是布尔值true或false。"
             }
         
         # 返回对应模型的提示词，如果没有对应的模板则使用默认模板
@@ -94,7 +78,8 @@ class PromptGenerator:
                 "minimax": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容并回答问题。提供详细、准确、有用的信息。",
                 "gemini": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容并回答问题。",
                 "qwen": "你是一个专业的视觉分析助手，请帮助用户分析图像中的内容并回答问题。",
-                "llama": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容并回答问题。"
+                "llama": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容并回答问题。",
+                "douban": "你是一个专业的视觉分析助手，请帮助用户分析图像中的内容并回答问题。"
             }
         else:
             # 目标搜索模式的系统提示词
@@ -102,7 +87,8 @@ class PromptGenerator:
                 "minimax": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。你应该使用规范的JSON格式返回分析结果，包含targets数组和description字段。",
                 "gemini": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。",
                 "qwen": "你是一个专业的视觉分析助手，请帮助用户分析图像中的内容。你的回答必须是规范的JSON格式，包含targets数组和description字段。不要包含任何其他内容或解释。",
-                "llama": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。"
+                "llama": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。",
+                "douban": "你是一个专业的视觉分析助手，请帮助用户分析图像中的内容。你的回答必须是规范的JSON格式，包含targets数组和description字段。"
             }
         
         # 返回对应模型的系统提示词，如果没有对应的模板则使用默认模板
@@ -143,8 +129,8 @@ class PromptGenerator:
         }
         
         # 为不同模型构建适合的用户消息格式
-        if model_name.lower() == "minimax" or model_name.lower() == "gemini":
-            # MiniMax和Gemini使用特定的内容格式
+        if model_name.lower() in ["minimax", "gemini", "douban"]:
+            # MiniMax、Gemini和豆包使用特定的内容格式
             user_message = {
                 "role": "user",
                 "content": [

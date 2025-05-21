@@ -3,7 +3,7 @@ const CONFIG = {
     maxFileSize: 100 * 1024 * 1024, // 100MB
     validVideoTypes: ['video/mp4', 'video/avi', 'video/quicktime', 'video/x-matroska'],
     alertDuration: 2500,
-    defaultModel: 'llama',
+    defaultModel: 'kimi',
     defaultFrameInterval: 0.3,
     minFrameInterval: 0.2,
     maxFrameInterval: 10,

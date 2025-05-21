@@ -20,41 +20,6 @@ APP_CONFIG = {
     "max_frame_size": (800, 800),  # 最大帧尺寸
 }
 
-# Ollama 服务配置
-OLLAMA_CONFIG = {
-    "base_url": os.environ.get("OLLAMA_BASE_URL", "http://123.157.129.172:3336"),
-    "enable_ollama": os.environ.get("ENABLE_OLLAMA", "False").lower() == "true",
-    "timeout": int(os.environ.get("OLLAMA_TIMEOUT", 30)),
-    "retry_count": int(os.environ.get("OLLAMA_RETRY_COUNT", 2)),
-    "retry_delay": int(os.environ.get("OLLAMA_RETRY_DELAY", 3)),
-    "health_check_timeout": int(os.environ.get("OLLAMA_HEALTH_CHECK_TIMEOUT", 10)),
-    "allow_start_without_ollama": os.environ.get("ALLOW_START_WITHOUT_OLLAMA", "True").lower() == "true"
-}
-
-# Ollama API 配置
-OLLAMA_API_CONFIG = {
-    "base_url": OLLAMA_CONFIG["base_url"],
-    "endpoints": {
-        "tags": "/api/tags",      # 获取可用模型列表
-        "chat": "/api/chat",      # 对话接口
-        "generate": "/api/generate", # 生成接口
-        "version": "/api/version"  # 版本信息接口
-    },
-    "timeouts": {
-        "connect": 5.0,  # 连接超时
-        "read": 30.0,    # 读取超时
-        "write": 30.0    # 写入超时
-    },
-    "models": {
-        "vision": "llama3.2-vision:latest",  # 视觉分析模型
-        "chat": "llama2"                     # 对话模型
-    },
-    "retry": {
-        "max_attempts": OLLAMA_CONFIG["retry_count"],
-        "delay": OLLAMA_CONFIG["retry_delay"]
-    }
-}
-
 # 视频处理配置
 VIDEO_CONFIG = {
     "max_frames_per_second": 0.5,  # 每秒处理的最大帧数 (0.5 = 每2秒一帧)
@@ -113,11 +78,32 @@ QWEN_CONFIG = {
     "max_tokens": 2048
 }
 
+# Kimi (Moonshot) 配置
+KIMI_CONFIG = {
+    "api_key": os.environ.get("MOONSHOT_API_KEY", "sk-0Z1hLOuByQX07E8KMaO1MtkdPPqevAiTInmrNwmt8jSisdNd"),
+    "base_url": "https://api.moonshot.cn/v1",
+    "model": "moonshot-v1-8k-vision-preview",
+    "temperature": 0.1,
+    "max_tokens": 1024
+}
+
+# Douban (Volcengine) 配置
+DOUBAN_CONFIG = {
+    "api_key": os.environ.get("ARK_API_KEY", "41850bee-3d60-4246-9956-a1d143398926"),
+    "model": "doubao-1-5-vision-pro-32k-250115",  # 更新为最新的豆包视觉模型ID
+    "base_url": "https://ark.cn-beijing.volces.com/api/v3",  # 更新为官方文档中的基础URL
+    "temperature": 0.7,
+    "max_tokens": 1024
+}
+
 # 模型配置
 MODELS = {
-    "llama": {
-        "name": OLLAMA_API_CONFIG["models"]["vision"],  # 使用配置中定义的模型名称
-        "base_url": OLLAMA_API_CONFIG["base_url"],     # 使用配置中定义的服务器地址
+    "kimi": {
+        "name": KIMI_CONFIG["model"],
+        "api_key": KIMI_CONFIG["api_key"],
+        "base_url": KIMI_CONFIG["base_url"],
+        "temperature": KIMI_CONFIG["temperature"],
+        "max_tokens": KIMI_CONFIG["max_tokens"]
     },
     "gemini": {
         "name": GEMINI_CONFIG["model"],
@@ -142,8 +128,15 @@ MODELS = {
         "base_url": QWEN_CONFIG["base_url"],
         "temperature": QWEN_CONFIG["temperature"],
         "max_tokens": QWEN_CONFIG["max_tokens"]
+    },
+    "douban": {
+        "name": DOUBAN_CONFIG["model"],
+        "api_key": DOUBAN_CONFIG["api_key"],
+        "base_url": DOUBAN_CONFIG["base_url"],
+        "temperature": DOUBAN_CONFIG["temperature"],
+        "max_tokens": DOUBAN_CONFIG["max_tokens"]
     }
 }
 
 # 默认模型
-DEFAULT_MODEL = "llama"
+DEFAULT_MODEL = "kimi"

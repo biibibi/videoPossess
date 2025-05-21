@@ -9,12 +9,11 @@ from pathlib import Path
 import asyncio
 import json
 import httpx
-from ollama import Client
 from contextlib import asynccontextmanager
 from tenacity import retry, stop_after_attempt, wait_exponential
 import logging
 import os
-from config import OLLAMA_CONFIG, OLLAMA_API_CONFIG, APP_CONFIG, MODELS, DEFAULT_MODEL, GEMINI_CONFIG
+from config import APP_CONFIG, MODELS, DEFAULT_MODEL, GEMINI_CONFIG
 import functools
 import base64
 from openai import OpenAI
@@ -28,6 +27,15 @@ import numpy as np
 from fastapi.responses import StreamingResponse
 from typing import List, Dict, Any, Callable, TypeVar, Awaitable, Optional, Union
 import inspect
+
+# 导入特定模型的依赖
+try:
+    import volcenginesdkarkruntime  # 火山引擎豆包SDK
+    ARK_IMPORTED = True
+    logging.info("volcengine豆包SDK导入成功")
+except ImportError:
+    ARK_IMPORTED = False
+    logging.warning("volcenginesdkarkruntime未安装，豆包模型将无法使用，请执行 pip install volcengine-python-sdk")
 
 # 函数返回类型定义
 T = TypeVar('T')
@@ -133,9 +141,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 从配置文件获取设置
-OLLAMA_BASE_URL = OLLAMA_CONFIG.get("base_url", "http://123.157.129.172:3336")
-ENABLE_OLLAMA = OLLAMA_CONFIG.get("enable_ollama", True)
-
 # 应用配置
 TEMPLATES_DIR = Path(APP_CONFIG.get("templates_dir", "templates"))
 STATIC_DIR = Path(APP_CONFIG.get("static_dir", "static"))
@@ -144,96 +149,55 @@ STATIC_DIR = Path(APP_CONFIG.get("static_dir", "static"))
 TEMPLATES_DIR.mkdir(exist_ok=True)
 STATIC_DIR.mkdir(exist_ok=True)
 
+# 添加全局变量来保存RTSP连接和视频流
+rtsp_cap = None
+rtsp_url = None
+rtsp_connected = False
+rtsp_frame = None
+rtsp_last_frame_time = 0
+output_frame = None  # 当前输出帧
+last_screenshot_frame = None  # 最后一个截图帧
+last_screenshot_time = 0  # 最后截图时间
+lock = asyncio.Lock()  # 用于保护全局帧变量的锁
+rtsp_thread = None  # RTSP帧捕获线程
+JPEG_QUALITY = 85  # JPEG图像质量
+SCREENSHOT_INTERVAL = 1.0  # 截图间隔，秒
+FRAME_WIDTH = 640  # 帧宽度，如果需要调整
+FRAME_HEIGHT = 360  # 帧高度，如果需要调整
+capture_task = None  # 异步捕获任务
 
-# 初始化Ollama客户端
-ollama_client = None
-
-# 创建Ollama客户端
-@retry(stop=stop_after_attempt(OLLAMA_CONFIG.get("retry_count", 2)), 
-       wait=wait_exponential(multiplier=1, min=4, max=10))
-async def create_ollama_client():
+# RTSP断开连接函数 - 定义在lifespan前，因为lifespan依赖它
+async def disconnect_rtsp():
     """
-    创建Ollama客户端
-    
-    使用重试机制确保客户端创建成功
-    
-    Returns:
-        Ollama客户端对象或None（如果创建失败）
+    断开RTSP视频流连接
     """
-    global ollama_client
-    if not ENABLE_OLLAMA:
-        logger.warning("Ollama服务已禁用，跳过客户端创建")
-        return None
-            
-    try:
-        # 创建客户端
-        client = Client(host=OLLAMA_BASE_URL)
-        
-        # 测试连接
+    global rtsp_cap, rtsp_url, rtsp_connected, rtsp_frame, capture_task
+    
+    # 取消捕获任务
+    if capture_task:
+        capture_task.cancel()
         try:
-            # 获取可用模型列表
-            models = await run_in_thread(client.list)
-            
-            # 检查所需模型是否可用
-            required_model = OLLAMA_API_CONFIG['models']['vision']
-            model_names = [m.get('name', '') for m in models.get('models', [])]
-            
-            if required_model not in model_names:
-                logger.warning(f"所需模型 {required_model} 不可用，可用模型: {model_names}")
-                return None
-                
-            logger.info(f"Ollama客户端创建成功，连接到 {OLLAMA_BASE_URL}")
-            ollama_client = client
-            return client
-        except Exception as test_error:
-            logger.error(f"测试Ollama连接失败: {str(test_error)}")
-            return None
-    except Exception as e:
-        logger.error(f"创建Ollama客户端失败: {str(e)}")
-        return None
-
-async def check_ollama_connection(force_reconnect=False):
-    """
-    统一的Ollama连接检查和客户端初始化函数
-    
-    检查Ollama服务连接状态，并在需要时创建或重新创建客户端
-    
-    Args:
-        force_reconnect: 是否强制重新连接，即使客户端已存在
+            await capture_task
+        except asyncio.CancelledError:
+            pass
+        capture_task = None
         
-    Returns:
-        (bool, str): 连接状态和消息元组
-    """
-    global ollama_client
+    # 关闭视频捕获对象
+    if rtsp_cap is not None:
+        # 简化为直接调用，避免try嵌套
+        await run_in_thread(lambda: rtsp_cap.release())
+        logger.info("视频捕获对象已释放")
+        rtsp_cap = None
     
-    # 检查是否启用Ollama
-    if not ENABLE_OLLAMA:
-        return False, "Ollama服务已禁用"
+    # 添加短暂延迟，尝试允许底层资源完全释放
+    await asyncio.sleep(0.1)
     
-    # 强制重连或客户端不存在时，创建新客户端
-    if force_reconnect or ollama_client is None:
-        logger.info("初始化Ollama客户端" if ollama_client is None else "重新初始化Ollama客户端")
-        ollama_client = await create_ollama_client()
-        
-        if ollama_client is None:
-            return False, "无法创建Ollama客户端连接"
+    # 重置状态变量
+    rtsp_url = None
+    rtsp_connected = False
+    rtsp_frame = None
     
-    # 测试客户端是否可用
-    try:
-        # 简单的模型列表检查
-        models = await run_in_thread(ollama_client.list)
-        
-        # 检查所需模型是否可用
-        required_model = OLLAMA_API_CONFIG['models']['vision']
-        model_names = [m.get('name', '') for m in models.get('models', [])]
-        
-        if required_model not in model_names:
-            return False, f"所需模型 {required_model} 不可用"
-            
-        return True, "Ollama连接正常"
-    except Exception as e:
-        logger.error(f"Ollama连接测试失败: {str(e)}")
-        return False, f"Ollama连接测试失败: {str(e)}"
+    return True
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -245,12 +209,6 @@ async def lifespan(app: FastAPI):
     # 启动时
     logger.info("应用启动，初始化资源...")
     
-    # 初始化Ollama客户端
-    if ENABLE_OLLAMA:
-        status, message = await check_ollama_connection()
-        if not status:
-            logger.warning(f"Ollama初始化失败: {message}")
-    
     # 确保没有活动的RTSP连接
     await disconnect_rtsp()
     
@@ -259,22 +217,391 @@ async def lifespan(app: FastAPI):
     # 关闭时
     logger.info("应用关闭，清理资源...")
     
-    # 清理Ollama客户端
-    global ollama_client
-    if ollama_client is not None:
-        ollama_client = None
-    
     # 断开所有活动的RTSP连接
     await disconnect_rtsp()
 
 # 设置应用生命周期
 app = FastAPI(lifespan=lifespan)
 
-# 挂载静态文件 (移到这里)
+# 挂载静态文件
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-# 设置模板 (移到这里)
+# 设置模板
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# RTSP帧获取通用函数
+@app.get("/api/rtsp/frame")
+@api_error_handler(status_code=500)
+async def get_rtsp_frame(source: str = "current"):
+    """
+    获取RTSP视频流的当前帧或截图
+    
+    Args:
+        source: 帧来源，"current"表示当前帧，"screenshot"表示截图帧
+        
+    Returns:
+        包含帧base64编码的响应
+    """
+    global rtsp_connected, output_frame, last_screenshot_frame
+    
+    async with lock:
+        # 根据来源选择使用的帧
+        if source == "screenshot":
+            frame = last_screenshot_frame
+        else:  # 默认使用当前帧
+            frame = output_frame
+            
+        if not rtsp_connected or frame is None:
+            return create_api_response(
+                status="error",
+                message="未连接到RTSP流或未获取到有效帧",
+                connected=False,
+                frame=None,
+                status_code=404
+            )
+        
+        # 将帧编码为base64字符串
+        success, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
+        if not success:
+            return create_api_response(
+                status="error",
+                message="无法编码视频帧",
+                connected=True,
+                frame=None,
+                status_code=500
+            )
+            
+        frame_base64 = base64.b64encode(buffer).decode('utf-8')
+        
+        return create_api_response(
+            status="success",
+            connected=True,
+            frame=f"data:image/jpeg;base64,{frame_base64}"
+        )
+
+# 保留原有截图API，但改为调用通用函数
+@app.get("/api/rtsp/screenshot/base64")
+async def get_rtsp_screenshot_base64():
+    """
+    获取RTSP视频流的最新截图(Base64编码)
+    
+    返回Base64编码的图像数据，适用于分析API
+    """
+    return await get_rtsp_frame(source="screenshot")
+
+# 添加RTSP截图路由
+@app.get("/api/rtsp/screenshot")
+@api_error_handler(status_code=500)
+async def get_rtsp_screenshot():
+    """
+    获取RTSP视频流的最新截图
+    
+    返回JPEG格式的图像数据
+    """
+    global rtsp_connected, last_screenshot_frame
+    
+    async with lock:
+        if not rtsp_connected or last_screenshot_frame is None:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "status": "error",
+                    "message": "截图不可用，RTSP流未连接或尚未获取到有效帧",
+                    "connected": False
+                }
+            )
+        
+        # 复制帧以避免并发修改问题
+        frame_copy = last_screenshot_frame.copy()
+        
+    # 将帧编码为JPEG图像
+    success, buffer = cv2.imencode('.jpg', frame_copy, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
+    if not success:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": "无法编码截图",
+                "connected": True
+            }
+        )
+        
+    # 返回JPEG图像
+    return Response(content=buffer.tobytes(), media_type="image/jpeg")
+
+# RTSP连接路由
+@app.post("/api/rtsp/connect")
+@api_error_handler(status_code=500)
+async def connect_rtsp(request: Request):
+    """
+    连接到RTSP视频流
+    
+    接收RTSP URL，使用OpenCV连接到视频流
+    """
+    global rtsp_cap, rtsp_url, rtsp_connected, rtsp_frame, rtsp_last_frame_time, capture_task
+    
+    # 解析请求数据
+    data = await request.json()
+    url = data.get("url", "")
+    
+    # 验证URL
+    if not url or not url.startswith("rtsp://"):
+        return create_api_response(
+            status="error",
+            message="无效的RTSP URL",
+            connected=False,
+            status_code=400
+        )
+    
+    # 如果已经连接到相同的URL，直接返回成功
+    if rtsp_connected and rtsp_url == url and rtsp_cap is not None and rtsp_cap.isOpened():
+        return create_api_response(
+            status="success",
+            message="已经连接到该RTSP流",
+            connected=True
+        )
+    
+    # 如果之前有连接，先关闭
+    await disconnect_rtsp()
+    
+    # 重置连接状态
+    rtsp_connected = False
+    rtsp_frame = None
+    rtsp_last_frame_time = 0
+    
+    # 连接到新的RTSP URL
+    logger.info(f"尝试连接到RTSP流: {url}")
+    rtsp_url = url
+    
+    # 启动异步捕获任务
+    capture_task = asyncio.create_task(capture_frames())
+    
+    # 等待一段时间以确保能够成功连接
+    await asyncio.sleep(2)
+    
+    # 检查连接状态
+    if not rtsp_connected:
+        logger.error(f"无法连接到RTSP流: {url}")
+        if capture_task:
+            capture_task.cancel()
+            try:
+                await capture_task
+            except asyncio.CancelledError:
+                pass
+            capture_task = None
+            
+    return create_api_response(
+        status="error",
+        message="无法连接到RTSP流，请检查URL是否正确",
+        connected=False,
+        status_code=500
+    )
+
+# RTSP状态检查路由
+@app.get("/api/rtsp/status")
+@api_error_handler(status_code=500)
+async def check_rtsp_status():
+    """
+    检查RTSP连接状态
+    """
+    global rtsp_cap, rtsp_url, rtsp_connected
+    
+    if rtsp_cap is not None and rtsp_connected:
+        is_opened = await run_in_thread(lambda: rtsp_cap.isOpened())
+        if not is_opened:
+            rtsp_connected = False
+    
+    return create_api_response(
+        status="success",
+        connected=rtsp_connected,
+        url=rtsp_url if rtsp_connected else None,
+        last_frame_time=rtsp_last_frame_time if rtsp_connected else 0
+    )
+
+# RTSP断开连接路由
+@app.post("/api/rtsp/disconnect")
+@api_error_handler(status_code=500)
+async def disconnect_rtsp_endpoint():
+    """
+    断开RTSP视频流连接 - API端点
+    """
+    await disconnect_rtsp()
+    return create_api_response(
+        status="success",
+        message="成功断开RTSP连接",
+        connected=False
+    )
+
+# 新增MJPEG流端点
+@app.get("/api/rtsp/stream")
+async def video_feed():
+    """
+    提供MJPEG视频流
+    """
+    if not rtsp_connected:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "status": "error",
+                "message": "未连接到RTSP流",
+                "connected": False
+            }
+        )
+    
+    return StreamingResponse(
+        generate_video_stream(),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+# 初始化视频捕获对象
+async def initialize_video_capture():
+    """
+    初始化或重新初始化视频捕获对象
+    """
+    global rtsp_cap, rtsp_url, rtsp_connected
+    
+    logger.info(f"尝试连接到RTSP流: {rtsp_url}")
+    
+    if rtsp_cap is not None:
+        await run_in_thread(lambda: rtsp_cap.release())
+    
+    # 使用OpenCV连接RTSP流
+    rtsp_cap = await run_in_thread(lambda: cv2.VideoCapture(rtsp_url))
+    
+    # 检查连接是否成功
+    is_opened = await run_in_thread(lambda: rtsp_cap.isOpened())
+    if not is_opened:
+        logger.error(f"无法连接到RTSP流: {rtsp_url}")
+        rtsp_connected = False
+        return False
+    
+    # 可选：设置缓冲区大小以减少延迟
+    await run_in_thread(lambda: rtsp_cap.set(cv2.CAP_PROP_BUFFERSIZE, 3))
+    
+    rtsp_connected = True
+    logger.info(f"成功连接到RTSP流: {rtsp_url}")
+    return True
+
+# 持续捕获帧的异步任务
+async def capture_frames():
+    """
+    持续从RTSP流中捕获帧的异步任务
+    """
+    global rtsp_cap, rtsp_connected, output_frame, last_screenshot_frame, last_screenshot_time
+    
+    logger.info("启动RTSP帧捕获任务")
+    
+    # 初始化视频捕获
+    success = await initialize_video_capture()
+    if not success:
+        logger.error("初始化视频捕获失败")
+        rtsp_connected = False
+        return
+    
+    # 主捕获循环
+    while rtsp_connected:
+        try:
+            # 检查连接状态
+            is_opened = await run_in_thread(lambda: rtsp_cap.isOpened() if rtsp_cap else False)
+            if not is_opened:
+                logger.warning("RTSP连接已断开，尝试重新连接")
+                rtsp_connected = False
+                success = await initialize_video_capture()
+                if not success:
+                    # 如果重连失败，等待一段时间后再次尝试
+                    await asyncio.sleep(5)
+                    continue
+            
+            # 读取一帧
+            ret, frame = await run_in_thread(lambda: rtsp_cap.read() if rtsp_cap else (False, None))
+            
+            if not ret or frame is None:
+                # 读取失败，可能是网络问题，等待一会再试
+                logger.warning("RTSP帧读取失败")
+                await asyncio.sleep(0.5)
+                continue
+            
+            # 可选：调整帧大小
+            if FRAME_WIDTH and FRAME_HEIGHT:
+                frame = await run_in_thread(lambda: cv2.resize(frame, (FRAME_WIDTH, FRAME_HEIGHT)))
+            
+            # 更新全局帧
+            current_time = time.time()
+            async with lock:
+                output_frame = frame.copy()
+                # 更新截图帧（如果间隔已过）
+                if current_time - last_screenshot_time >= SCREENSHOT_INTERVAL:
+                    last_screenshot_frame = frame.copy()
+                    last_screenshot_time = current_time
+            
+            # 控制循环速率，避免过度占用CPU
+            await asyncio.sleep(0.01)
+            
+        except asyncio.CancelledError:
+            # 任务被取消
+            logger.info("RTSP帧捕获任务被取消")
+            raise
+        except Exception as e:
+            # 其他错误
+            logger.error(f"RTSP帧捕获出错: {str(e)}")
+            traceback.print_exc()
+            await asyncio.sleep(1)  # 出错后等待较长时间再试
+    
+    # 清理工作
+    if rtsp_cap:
+        await run_in_thread(lambda: rtsp_cap.release())
+    
+    logger.info("RTSP帧捕获任务结束")
+
+# 生成视频流
+async def generate_video_stream():
+    """
+    生成用于web页面的MJPEG流
+    """
+    global output_frame, rtsp_connected
+    
+    while rtsp_connected:
+        try:
+            frame_copy = None
+            async with lock:
+                if output_frame is None:
+                    # 如果没有可用帧，等待
+                    await asyncio.sleep(0.1)
+                    continue
+                frame_copy = output_frame.copy()
+            
+            # 编码帧为JPEG
+            success, buffer = cv2.imencode('.jpg', frame_copy, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
+            if not success:
+                await asyncio.sleep(0.1)
+                continue
+            
+            # 生成帧数据
+            frame_bytes = buffer.tobytes()
+            yield (b'--frame\r\n'
+                  b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            
+            # 控制帧率
+            await asyncio.sleep(1/30)  # 约30FPS
+            
+        except Exception as e:
+            logger.error(f"生成视频流时出错: {str(e)}")
+            await asyncio.sleep(0.5)
+            
+    # 当连接断开时，发送一个黑色帧或消息帧
+    try:
+        # 创建一个黑色帧
+        black_frame = np.zeros((FRAME_HEIGHT, FRAME_WIDTH, 3), np.uint8)
+        cv2.putText(black_frame, "RTSP Stream Disconnected", (50, FRAME_HEIGHT//2),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        
+        success, buffer = cv2.imencode('.jpg', black_frame)
+        if success:
+            frame_bytes = buffer.tobytes()
+            yield (b'--frame\r\n'
+                  b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+    except Exception as e:
+        logger.error(f"生成最终帧时出错: {str(e)}")
 
 # 主页路由
 @app.get("/")
@@ -286,238 +613,63 @@ async def home(request: Request):
     """
     return templates.TemplateResponse("index.html", {"request": request})
 
-# 测试Ollama连接
-async def test_ollama_connection():
-    """
-    测试Ollama服务连接
-    
-    检查Ollama服务是否可用，并初始化客户端
-    """
-    try:
-        # 创建客户端
-        client = await create_ollama_client()
-        
-        if client is None:
-            logger.error("无法创建Ollama客户端")
-            return False
-            
-        # 测试连接
-        try:
-            # 获取可用模型列表
-            models = await run_in_thread(client.list)
-            
-            # 检查所需模型是否可用
-            required_model = OLLAMA_API_CONFIG['models']['vision']
-            model_names = [m.get('name', '') for m in models.get('models', [])]
-            
-            if required_model not in model_names:
-                logger.warning(f"所需模型 {required_model} 不可用，可用模型: {model_names}")
-                return False
-                
-            logger.info(f"Ollama服务连接成功，可用模型: {model_names}")
-            return True
-        except Exception as test_error:
-            logger.error(f"测试Ollama连接失败: {str(test_error)}")
-            return False
-    except Exception as e:
-        logger.error(f"测试Ollama连接失败: {str(e)}")
-        return False
-
-# 检查客户端状态
-async def check_client_status():
-    """
-    检查Ollama客户端状态
-    
-    如果客户端未初始化或连接失败，尝试重新初始化
-    """
-    global ollama_client
-    
-    if ollama_client is None:
-        logger.warning("Ollama客户端未初始化，尝试重新初始化")
-        ollama_client = await create_ollama_client()
-        
-        if ollama_client is None:
-            logger.error("重新初始化客户端失败")
-            return False
-    return True
-
 @app.get("/health")
 @api_error_handler(status_code=503)
 async def health_check():
     """
     健康检查端点
     
-    检查Ollama服务连接状态和模型可用性
+    检查服务健康状态
     """
-    # 检查Ollama客户端状态
-    status, message = await check_ollama_connection()
-    
-    if not status:
-        return create_api_response(
-            status="error",
-            message=message,
-            status_code=503
-        )
-    
-    # 测试模型功能
-    try:
-        response = await run_in_thread(
-            ollama_client.chat,
-            model=OLLAMA_API_CONFIG['models']['vision'],
-            messages=[{
-                'role': 'user',
-                'content': '测试消息'
-            }]
-        )
+    # 检查Kimi API密钥是否配置
+    kimi_api_key = os.environ.get("MOONSHOT_API_KEY", "")
+    if not kimi_api_key and "kimi" in MODELS:
+        kimi_api_key = MODELS.get("kimi", {}).get("api_key", "")
         
-        # 检查响应格式
-        if response and 'message' in response:
-            return create_api_response(
-                status="success",
-                message="服务运行正常",
-                ollama_server="已连接",
-                model_status="可用",
-                model_name=OLLAMA_API_CONFIG['models']['vision']
-            )
-        else:
-            return create_api_response(
-                status="error",
-                message="模型响应格式无效",
-                status_code=503
-            )
-    except Exception as model_error:
-        logger.error(f"模型测试错误: {str(model_error)}")
-        return create_api_response(
-            status="error",
-            message=f"模型测试失败: {str(model_error)}",
-            status_code=503
-        )
-
-@app.get("/api/test")
-async def test_api():
-    """
-    API测试端点
+    kimi_status = "已配置" if kimi_api_key else "未配置"
     
-    测试Ollama API连接和可用模型列表
-    """
-    results = {
-        "timestamp": time.time(),
-        "server_info": {
-            "url": OLLAMA_BASE_URL,
-            "connection_status": "unknown",
-            "status_code": None
-        },
-        "available_models": None,
-        "error": None
-    }
-    
-    async with httpx.AsyncClient(timeout=OLLAMA_API_CONFIG["timeouts"]["connect"]) as client:
-        try:
-            # 测试API连接
-            tags = await client.get(f"{OLLAMA_BASE_URL}{OLLAMA_API_CONFIG['endpoints']['tags']}")
-            results["server_info"]["status_code"] = tags.status_code
-            
-            if tags.status_code == 200:
-                results["server_info"]["connection_status"] = "connected"
-                
-                # 解析可用模型列表
-                try:
-                    models_data = tags.json()
-                    results["available_models"] = models_data
-                    
-                    # 检查所需模型是否可用
-                    if 'models' in models_data and isinstance(models_data['models'], list):
-                        model_names = [m.get('name', '') for m in models_data['models']]
-                        required_model = OLLAMA_API_CONFIG['models']['vision']
-                        
-                        if required_model in model_names:
-                            results["required_model"] = {
-                                "name": required_model,
-                                "available": True
-                            }
-                        else:
-                            results["required_model"] = {
-                                "name": required_model,
-                                "available": False
-                            }
-                except json.JSONDecodeError as e:
-                    results["error"] = f"解析模型数据失败: {str(e)}"
-            else:
-                results["server_info"]["connection_status"] = "failed"
-                results["error"] = f"API请求失败，状态码: {tags.status_code}"
-                
-            return {
-                "status": "success" if results["error"] is None else "error",
-                "results": results
-            }
-        except Exception as e:
-            logger.error(f"API 测试错误: {str(e)}")
-            results["error"] = str(e)
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "status": "error",
-                    "message": str(e),
-                    "results": results
-                }
-            )
+    return create_api_response(
+        status="success",
+        message="服务运行正常",
+        models_status={
+            "minimax": "可用",
+            "qwen": "可用",
+            "gemini": "可用",
+            "kimi": kimi_status
+        }
+    )
 
-@app.get("/test-ollama")
-async def test_ollama():
+@app.get("/test-kimi")
+async def test_kimi():
     """
-    测试Ollama模型的基本对话功能
+    测试Kimi模型的基本功能
     """
-    try:
-        # 检查客户端状态
-        if not await check_client_status():
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "status": "错误",
-                    "message": "Ollama 客户端未初始化",
-                    "timestamp": time.time()
-                }
-            )
-            
-        # 测试模型对话
-        response = await run_in_thread(
-            ollama_client.chat,
-            model=OLLAMA_API_CONFIG['models']['vision'],
-            messages=[{
-                'role': 'user',
-                'content': '请简单介绍一下你自己'
-            }]
-        )
-        
-        # 检查响应格式
-        if response and 'message' in response:
-            return {
-                "status": "成功",
-                "model": OLLAMA_API_CONFIG['models']['vision'],
-                "response": response,
-                "timestamp": time.time()
-            }
-        else:
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "status": "错误",
-                    "message": "模型响应格式无效",
-                    "timestamp": time.time()
-                }
-            )
-    except Exception as e:
-        logger.error(f"测试错误: {str(e)}")
+    # 检查API密钥是否配置
+    api_key = os.environ.get("MOONSHOT_API_KEY", "")
+    if not api_key and "kimi" in MODELS:
+        api_key = MODELS.get("kimi", {}).get("api_key", "")
+    
+    if not api_key:
         return JSONResponse(
-            status_code=500,
+            status_code=400,
             content={
-                "status": "错误",
-                "message": str(e),
+                "status": "error",
+                "message": "未设置Moonshot API密钥，请在环境变量或配置文件中设置MOONSHOT_API_KEY",
                 "timestamp": time.time()
             }
         )
+    
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "success",
+            "message": "Kimi配置有效，API密钥已设置",
+            "model": "moonshot-v1-8k-vision-preview",
+            "timestamp": time.time()
+        }
+    )
 
-# 添加图像分析API端点
+# 图像分析API端点
 @app.post("/api/analyze")
 @api_error_handler(status_code=500)
 async def analyze_image(request: Request):
@@ -570,7 +722,8 @@ system_prompts = {
     "minimax": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。",
     "gemini": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。",
     "qwen": "你是一个专业的视觉分析助手，请帮助用户分析图像中的内容。",
-    "llama": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。"
+    "kimi": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。",
+    "douban": "你是一个专业的视觉分析助手，请帮助用户分析图像中的内容。请始终使用有效的JSON格式返回分析结果，确保每个目标都有明确的found属性，值为true或false。"
 }
 
 # 添加API调用超时和重试机制
@@ -676,7 +829,7 @@ def format_api_response(content, targets, error=None, model_name=None, found_tar
             "timestamp": time.time() # 添加时间戳确保排序
         }
     
-            # 针对Gemini模型的特殊处理
+    # 针对Gemini模型的特殊处理
     if model_name == "gemini":
         # 创建更精确的匹配模式
         content_lower = content.lower() if content else ""
@@ -865,7 +1018,7 @@ class ModelProcessor:
     @staticmethod
     async def _parse_json_from_text(content: str):
         """
-        从文本中提取和解析JSON内容
+        从文本中提取和解析JSON内容，增强版本
         
         Args:
             content: 包含可能JSON内容的文本
@@ -873,19 +1026,53 @@ class ModelProcessor:
         Returns:
             解析后的JSON对象，或None
         """
-        try:
-            # 尝试识别和提取JSON内容
-            json_match = re.search(r'```(?:json)?\s*(.*?)```', content, re.DOTALL)
-            json_text = json_match.group(1).strip() if json_match else content
+        if not content:
+            return None
             
-            # 清理可能的非JSON文本
-            json_text = re.sub(r'^[^{]*', '', json_text)
-            json_text = re.sub(r'[^}]*$', '', json_text)
+        # 多种解析策略
+        strategies = [
+            # 策略1: 提取```json```代码块中的内容 
+            lambda text: re.search(r'```(?:json)?\s*(.*?)```', text, re.DOTALL),
+            
+            # 策略2: 提取{}括起来的完整JSON
+            lambda text: re.search(r'({.*})', text, re.DOTALL),
+            
+            # 策略3: 查找最长的{...}块
+            lambda text: max(re.finditer(r'{[^{}]*(?:{[^{}]*}[^{}]*)*}', text), 
+                            key=lambda m: len(m.group(0)), default=None)
+        ]
+        
+        for strategy in strategies:
+            try:
+                match = strategy(content)
+                if match:
+                    json_text = match.group(1).strip()
+                    
+                    # 修复常见的格式问题
+                    json_text = json_text.replace("'", '"')  # 单引号替换为双引号
+                    json_text = re.sub(r',\s*}', '}', json_text)  # 移除末尾逗号
+                    
+                    # 尝试解析
+                    parsed = json.loads(json_text)
+                    logger.info(f"成功解析JSON: {json_text[:100]}...")
+                    return parsed
+            except (json.JSONDecodeError, AttributeError, KeyError, IndexError) as e:
+                logger.debug(f"JSON解析策略失败: {str(e)}")
+                continue
+        
+        # 最后的尝试：直接解析整个内容
+        try:
+            # 清理可能的非JSON文本，尝试获得一个有效的JSON字符串
+            json_text = content
+            json_text = re.sub(r'^[^{]*', '', json_text)  # 移除开头直到第一个{
+            json_text = re.sub(r'[^}]*$', '', json_text)  # 移除最后一个}之后的所有内容
             
             # 尝试解析
-            return json.loads(json_text)
+            parsed = json.loads(json_text)
+            logger.info(f"成功解析清理后的JSON: {json_text[:100]}...")
+            return parsed
         except (json.JSONDecodeError, AttributeError, KeyError) as e:
-            logger.warning(f"JSON解析失败: {str(e)}")
+            logger.warning(f"所有JSON解析尝试均失败: {str(e)}")
             return None
     
     @staticmethod
@@ -1258,6 +1445,212 @@ class ModelProcessor:
             return format_api_response(None, targets, error=f"{str(api_error)}", model_name="gemini")
     
     @staticmethod
+    async def process_kimi(image_data, targets, system_message, user_message, start_time):
+        """处理Moonshot Kimi模型的API调用"""
+        try:
+            # 获取Moonshot Kimi配置 - 从环境变量或配置中获取
+            api_key = os.environ.get("MOONSHOT_API_KEY", "")
+            if not api_key and "kimi" in MODELS:
+                api_key = MODELS.get("kimi", {}).get("api_key", "")
+            
+            if not api_key:
+                return format_api_response(
+                    None, 
+                    targets, 
+                    error="未设置Moonshot API密钥，请在环境变量或配置文件中设置MOONSHOT_API_KEY", 
+                    model_name="kimi"
+                )
+            
+            # 提取消息内容
+            text_content = await ModelProcessor._extract_user_message_text(user_message)
+            if not text_content:
+                text_content = await ModelProcessor._generate_default_query(targets)
+                logger.warning(f"无法从user_message提取文本内容，使用默认查询: {text_content}")
+            
+            system_content = await ModelProcessor._extract_system_message_text(system_message)
+            
+            # 记录API调用开始
+            api_start_time = time.time()
+            logger.info(f"开始调用Kimi模型API，时间: {api_start_time}")
+            
+            # 初始化OpenAI客户端，使用Moonshot的API
+            client = OpenAI(
+                api_key=api_key,
+                base_url="https://api.moonshot.cn/v1"
+            )
+            
+            # 发送请求
+            response = client.chat.completions.create(
+                model="moonshot-v1-8k-vision-preview",
+                messages=[
+                    {"role": "system", "content": system_content},
+                    {"role": "user", "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}},
+                        {"type": "text", "text": text_content}
+                    ]}
+                ],
+                max_tokens=1024,
+                temperature=0.1
+            )
+            
+            # 计算API调用时间
+            api_call_time = time.time() - api_start_time
+            logger.info(f"模型Kimi API调用完成，耗时: {api_call_time:.2f}秒")
+            
+            # 提取响应内容
+            if hasattr(response, 'choices') and response.choices and len(response.choices) > 0:
+                content = response.choices[0].message.content
+                logger.debug(f"Kimi API 原始返回: {content}")
+                
+                # 尝试解析JSON返回
+                parsed_json = await ModelProcessor._parse_json_from_text(content)
+                
+                if parsed_json is not None:
+                    # 提取关键信息
+                    description = parsed_json.get("description", content)
+                    parsed_targets = parsed_json.get("targets", [])
+                    
+                    # 如果成功解析了targets
+                    if parsed_targets:
+                        return {
+                            "description": description,
+                            "targets": parsed_targets,
+                            "model": "kimi",
+                            "status": "success",
+                            "timestamp": time.time()  # 添加时间戳确保排序
+                        }
+                
+                # 使用通用响应解析
+                return format_api_response(content, targets, model_name="kimi")
+            else:
+                # 响应没有有效的choices
+                error_msg = "API响应缺少有效的choices"
+                logger.warning(f"Kimi API 响应无效: {error_msg}")
+                content = f"API响应格式无效: {str(response)}"
+                
+            # 使用标准格式化返回结果
+            return format_api_response(content, targets, model_name="kimi")
+                
+        except Exception as api_error:
+            logger.error(f"调用模型Kimi API时出错: {str(api_error)}")
+            traceback_info = traceback.format_exc()
+            logger.debug(f"调用Kimi出错详细信息: {traceback_info}")
+            return format_api_response(None, targets, error=f"{str(api_error)}", model_name="kimi")
+    
+    @staticmethod
+    async def process_douban(image_data, targets, system_message, user_message, start_time):
+        """处理火山引擎豆包大模型的API调用"""
+        try:
+            # 获取豆包配置 - 从环境变量或配置中获取
+            api_key = os.environ.get("ARK_API_KEY", "")
+            if not api_key and "douban" in MODELS:
+                api_key = MODELS.get("douban", {}).get("api_key", "")
+            
+            if not api_key:
+                return format_api_response(
+                    None, 
+                    targets, 
+                    error="未设置豆包 API密钥，请在环境变量或配置文件中设置ARK_API_KEY", 
+                    model_name="douban"
+                )
+            
+            # 提取消息内容
+            text_content = await ModelProcessor._extract_user_message_text(user_message)
+            if not text_content:
+                text_content = await ModelProcessor._generate_default_query(targets)
+                logger.warning(f"无法从user_message中提取文本内容，将使用生成的默认查询：{text_content}")
+            
+            # 增强提示词，要求返回标准化的JSON格式
+            text_content += "\n\n请使用标准JSON格式返回分析结果，格式如下：\n```json\n{\n  \"description\": \"图像的整体描述\",\n  \"targets\": [\n    {\"name\": \"目标1\", \"found\": true},\n    {\"name\": \"目标2\", \"found\": false}\n  ]\n}\n```"
+            
+            # 获取系统提示词
+            system_content = await ModelProcessor._extract_system_message_text(system_message)
+            
+            # 使用volcengine豆包SDK调用API
+            from volcenginesdkarkruntime import Ark
+            
+            # 初始化客户端 - 按官方示例实现
+            base_url = MODELS.get("douban", {}).get("base_url", "https://ark.cn-beijing.volces.com/api/v3")
+            client = Ark(
+                base_url=base_url,
+                api_key=api_key
+            )
+            
+            # 构建完整的消息列表
+            messages = []
+            # 添加系统消息（如果有）
+            if system_content:
+                messages.append({"role": "system", "content": system_content})
+            
+            # 添加用户消息
+            messages.append({
+                "role": "user", 
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}},
+                    {"type": "text", "text": text_content}
+                ]
+            })
+            
+            # 使用模型配置中的模型名称，或使用默认模型
+            model_name = MODELS.get("douban", {}).get("name", "doubao-1-5-vision-pro-32k-250115")
+            logger.info(f"使用豆包模型: {model_name}")
+            
+            # 发送请求
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=messages
+            )
+            
+            # 解析响应
+            result = {}
+            if hasattr(response, 'choices') and len(response.choices) > 0 and hasattr(response.choices[0], 'message'):
+                content = response.choices[0].message.content
+                logger.info(f"豆包API原始响应: {content}")
+                
+                # 尝试解析JSON返回 - 与Qwen类似
+                parsed_json = await ModelProcessor._parse_json_from_text(content)
+                
+                if parsed_json is not None:
+                    # 提取关键信息
+                    description = parsed_json.get("description", content)
+                    parsed_targets = parsed_json.get("targets", [])
+                    
+                    # 如果成功解析了targets
+                    if parsed_targets:
+                        response_dict = {
+                            "description": description,
+                            "targets": parsed_targets,
+                            "model": "douban",
+                            "status": "success",
+                            "timestamp": time.time()  # 添加时间戳确保排序
+                        }
+                        # 添加处理时间
+                        processing_time = time.time() - start_time
+                        response_dict["processing_time"] = processing_time
+                        return response_dict
+                
+                # 如果无法解析为JSON，使用通用响应解析
+                response_dict = format_api_response(content, targets, model_name="douban")
+                # 添加处理时间
+                processing_time = time.time() - start_time
+                response_dict["processing_time"] = processing_time
+                return response_dict
+            else:
+                logger.error(f"豆包API响应格式异常: {response}")
+                return format_api_response(
+                    None, 
+                    targets, 
+                    error=f"API响应格式异常: {response}", 
+                    model_name="douban"
+                )
+            
+        except Exception as e:
+            logger.error(f"豆包API调用出错: {str(e)}")
+            logger.error(traceback.format_exc())
+            api_error = str(e)
+            return format_api_response(None, targets, error=f"{str(api_error)}", model_name="douban")
+    
+    @staticmethod
     async def process_unsupported(model_name, targets, start_time):
         """处理尚未支持的模型"""
         content = f"模型{model_name}的响应处理尚未完成实现。检测到{len(targets)}个搜索目标。"
@@ -1319,424 +1712,20 @@ class ModelProcessor:
             return await cls.process_qwen(image_data, targets, system_message, user_message, start_time)
         elif model_name == "gemini":
             return await cls.process_gemini(image_data, targets, system_message, user_message, start_time)
+        elif model_name == "kimi":
+            return await cls.process_kimi(image_data, targets, system_message, user_message, start_time)
+        elif model_name == "douban":
+            # 检查volcengine豆包SDK是否可用
+            if not ARK_IMPORTED:
+                return format_api_response(
+                    None, 
+                    targets, 
+                    error="火山引擎豆包SDK未安装，请执行 pip install volcengine-python-sdk", 
+                    model_name="douban"
+                )
+            return await cls.process_douban(image_data, targets, system_message, user_message, start_time)
         else:
             return await cls.process_unsupported(model_name, targets, start_time)
-
-# 添加全局变量来保存RTSP连接和视频流
-rtsp_cap = None
-rtsp_url = None
-rtsp_connected = False
-rtsp_frame = None
-rtsp_last_frame_time = 0
-output_frame = None  # 当前输出帧
-last_screenshot_frame = None  # 最后一个截图帧
-last_screenshot_time = 0  # 最后截图时间
-lock = asyncio.Lock()  # 用于保护全局帧变量的锁
-rtsp_thread = None  # RTSP帧捕获线程
-JPEG_QUALITY = 85  # JPEG图像质量
-SCREENSHOT_INTERVAL = 1.0  # 截图间隔，秒
-FRAME_WIDTH = 640  # 帧宽度，如果需要调整
-FRAME_HEIGHT = 360  # 帧高度，如果需要调整
-capture_task = None  # 异步捕获任务
-
-# RTSP帧获取通用函数
-@app.get("/api/rtsp/frame")
-@api_error_handler(status_code=500)
-async def get_rtsp_frame(source: str = "current"):
-    """
-    获取RTSP视频流的当前帧或截图
-    
-    Args:
-        source: 帧来源，"current"表示当前帧，"screenshot"表示截图帧
-        
-    Returns:
-        包含帧base64编码的响应
-    """
-    global rtsp_connected, output_frame, last_screenshot_frame
-    
-    async with lock:
-        # 根据来源选择使用的帧
-        if source == "screenshot":
-            frame = last_screenshot_frame
-        else:  # 默认使用当前帧
-            frame = output_frame
-            
-        if not rtsp_connected or frame is None:
-            return create_api_response(
-                status="error",
-                message="未连接到RTSP流或未获取到有效帧",
-                connected=False,
-                frame=None,
-                status_code=404
-            )
-        
-        # 将帧编码为base64字符串
-        success, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
-        if not success:
-            return create_api_response(
-                status="error",
-                message="无法编码视频帧",
-                connected=True,
-                frame=None,
-                status_code=500
-            )
-            
-        frame_base64 = base64.b64encode(buffer).decode('utf-8')
-        
-        return create_api_response(
-            status="success",
-            connected=True,
-            frame=f"data:image/jpeg;base64,{frame_base64}"
-        )
-
-# 保留原有截图API，但改为调用通用函数
-@app.get("/api/rtsp/screenshot/base64")
-async def get_rtsp_screenshot_base64():
-    """
-    获取RTSP视频流的最新截图(Base64编码)
-    
-    返回Base64编码的图像数据，适用于分析API
-    """
-    return await get_rtsp_frame(source="screenshot")
-
-# 添加RTSP截图路由
-@app.get("/api/rtsp/screenshot")
-@api_error_handler(status_code=500)
-async def get_rtsp_screenshot():
-    """
-    获取RTSP视频流的最新截图
-    
-    返回JPEG格式的图像数据
-    """
-    global rtsp_connected, last_screenshot_frame
-    
-    async with lock:
-        if not rtsp_connected or last_screenshot_frame is None:
-            return JSONResponse(
-                status_code=404,
-                content={
-                    "status": "error",
-                    "message": "截图不可用，RTSP流未连接或尚未获取到有效帧",
-                    "connected": False
-                }
-            )
-        
-        # 复制帧以避免并发修改问题
-        frame_copy = last_screenshot_frame.copy()
-        
-    # 将帧编码为JPEG图像
-    success, buffer = cv2.imencode('.jpg', frame_copy, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
-    if not success:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "message": "无法编码截图",
-                "connected": True
-            }
-        )
-        
-    # 返回JPEG图像
-    return Response(content=buffer.tobytes(), media_type="image/jpeg")
-
-# RTSP连接路由
-@app.post("/api/rtsp/connect")
-@api_error_handler(status_code=500)
-async def connect_rtsp(request: Request):
-    """
-    连接到RTSP视频流
-    
-    接收RTSP URL，使用OpenCV连接到视频流
-    """
-    global rtsp_cap, rtsp_url, rtsp_connected, rtsp_frame, rtsp_last_frame_time, capture_task
-    
-    # 解析请求数据
-    data = await request.json()
-    url = data.get("url", "")
-    
-    # 验证URL
-    if not url or not url.startswith("rtsp://"):
-        return create_api_response(
-            status="error",
-            message="无效的RTSP URL",
-            connected=False,
-            status_code=400
-        )
-    
-    # 如果已经连接到相同的URL，直接返回成功
-    if rtsp_connected and rtsp_url == url and rtsp_cap is not None and rtsp_cap.isOpened():
-        return create_api_response(
-            status="success",
-            message="已经连接到该RTSP流",
-            connected=True
-        )
-    
-    # 如果之前有连接，先关闭
-    await disconnect_rtsp()
-    
-    # 重置连接状态
-    rtsp_connected = False
-    rtsp_frame = None
-    rtsp_last_frame_time = 0
-    
-    # 连接到新的RTSP URL
-    logger.info(f"尝试连接到RTSP流: {url}")
-    rtsp_url = url
-    
-    # 启动异步捕获任务
-    capture_task = asyncio.create_task(capture_frames())
-    
-    # 等待一段时间以确保能够成功连接
-    await asyncio.sleep(2)
-    
-    # 检查连接状态
-    if not rtsp_connected:
-        logger.error(f"无法连接到RTSP流: {url}")
-        if capture_task:
-            capture_task.cancel()
-            try:
-                await capture_task
-            except asyncio.CancelledError:
-                pass
-            capture_task = None
-            
-    return create_api_response(
-        status="error",
-        message="无法连接到RTSP流，请检查URL是否正确",
-        connected=False,
-        status_code=500
-    )
-
-# RTSP断开连接路由
-@app.post("/api/rtsp/disconnect")
-@api_error_handler(status_code=500)
-async def disconnect_rtsp():
-    """
-    断开RTSP视频流连接
-    """
-    global rtsp_cap, rtsp_url, rtsp_connected, rtsp_frame, capture_task
-    
-    # 取消捕获任务
-    if capture_task:
-        capture_task.cancel()
-        try:
-            await capture_task
-        except asyncio.CancelledError:
-            pass
-        capture_task = None
-    
-    # 关闭视频捕获对象
-    if rtsp_cap is not None:
-        # 简化为直接调用，避免try嵌套
-        await run_in_thread(lambda: rtsp_cap.release())
-        logger.info("视频捕获对象已释放")
-        rtsp_cap = None
-    
-    # 添加短暂延迟，尝试允许底层资源完全释放
-    await asyncio.sleep(0.1)
-    
-    # 重置状态变量
-    rtsp_url = None
-    rtsp_connected = False
-    rtsp_frame = None
-    
-    return create_api_response(
-        status="success",
-        message="成功断开RTSP连接",
-        connected=False
-    )
-
-# RTSP状态检查路由
-@app.get("/api/rtsp/status")
-@api_error_handler(status_code=500)
-async def check_rtsp_status():
-    """
-    检查RTSP连接状态
-    """
-    global rtsp_cap, rtsp_url, rtsp_connected
-    
-    if rtsp_cap is not None and rtsp_connected:
-        is_opened = await run_in_thread(lambda: rtsp_cap.isOpened())
-        if not is_opened:
-            rtsp_connected = False
-    
-    return create_api_response(
-        status="success",
-        connected=rtsp_connected,
-        url=rtsp_url if rtsp_connected else None,
-        last_frame_time=rtsp_last_frame_time if rtsp_connected else 0
-    )
-
-# 新增MJPEG流端点
-@app.get("/api/rtsp/stream")
-async def video_feed():
-    """
-    提供MJPEG视频流
-    """
-    if not rtsp_connected:
-        return JSONResponse(
-            status_code=404,
-            content={
-                "status": "error",
-                "message": "未连接到RTSP流",
-                "connected": False
-            }
-        )
-    
-    return StreamingResponse(
-        generate_video_stream(),
-        media_type="multipart/x-mixed-replace; boundary=frame"
-    )
-
-# 初始化视频捕获对象
-async def initialize_video_capture():
-    """
-    初始化或重新初始化视频捕获对象
-    """
-    global rtsp_cap, rtsp_url, rtsp_connected
-    
-    logger.info(f"尝试连接到RTSP流: {rtsp_url}")
-    
-    if rtsp_cap is not None:
-        await run_in_thread(lambda: rtsp_cap.release())
-    
-    # 使用OpenCV连接RTSP流
-    rtsp_cap = await run_in_thread(lambda: cv2.VideoCapture(rtsp_url))
-    
-    # 检查连接是否成功
-    is_opened = await run_in_thread(lambda: rtsp_cap.isOpened())
-    if not is_opened:
-        logger.error(f"无法连接到RTSP流: {rtsp_url}")
-        rtsp_connected = False
-        return False
-    
-    # 可选：设置缓冲区大小以减少延迟
-    await run_in_thread(lambda: rtsp_cap.set(cv2.CAP_PROP_BUFFERSIZE, 3))
-    
-    rtsp_connected = True
-    logger.info(f"成功连接到RTSP流: {rtsp_url}")
-    return True
-
-# 持续捕获帧的异步任务
-async def capture_frames():
-    """
-    持续从RTSP流中捕获帧的异步任务
-    """
-    global rtsp_cap, rtsp_connected, output_frame, last_screenshot_frame, last_screenshot_time
-    
-    logger.info("启动RTSP帧捕获任务")
-    
-    # 初始化视频捕获
-    success = await initialize_video_capture()
-    if not success:
-        logger.error("初始化视频捕获失败")
-        rtsp_connected = False
-        return
-    
-    # 主捕获循环
-    while rtsp_connected:
-        try:
-            # 检查连接状态
-            is_opened = await run_in_thread(lambda: rtsp_cap.isOpened() if rtsp_cap else False)
-            if not is_opened:
-                logger.warning("RTSP连接已断开，尝试重新连接")
-                rtsp_connected = False
-                success = await initialize_video_capture()
-                if not success:
-                    # 如果重连失败，等待一段时间后再次尝试
-                    await asyncio.sleep(5)
-                    continue
-            
-            # 读取一帧
-            ret, frame = await run_in_thread(lambda: rtsp_cap.read() if rtsp_cap else (False, None))
-            
-            if not ret or frame is None:
-                # 读取失败，可能是网络问题，等待一会再试
-                logger.warning("RTSP帧读取失败")
-                await asyncio.sleep(0.5)
-                continue
-            
-            # 可选：调整帧大小
-            if FRAME_WIDTH and FRAME_HEIGHT:
-                frame = await run_in_thread(lambda: cv2.resize(frame, (FRAME_WIDTH, FRAME_HEIGHT)))
-            
-            # 更新全局帧
-            current_time = time.time()
-            async with lock:
-                output_frame = frame.copy()
-                # 更新截图帧（如果间隔已过）
-                if current_time - last_screenshot_time >= SCREENSHOT_INTERVAL:
-                    last_screenshot_frame = frame.copy()
-                    last_screenshot_time = current_time
-            
-            # 控制循环速率，避免过度占用CPU
-            await asyncio.sleep(0.01)
-            
-        except asyncio.CancelledError:
-            # 任务被取消
-            logger.info("RTSP帧捕获任务被取消")
-            raise
-        except Exception as e:
-            # 其他错误
-            logger.error(f"RTSP帧捕获出错: {str(e)}")
-            traceback.print_exc()
-            await asyncio.sleep(1)  # 出错后等待较长时间再试
-    
-    # 清理工作
-    if rtsp_cap:
-        await run_in_thread(lambda: rtsp_cap.release())
-    
-    logger.info("RTSP帧捕获任务结束")
-
-# 生成视频流
-async def generate_video_stream():
-    """
-    生成用于web页面的MJPEG流
-    """
-    global output_frame, rtsp_connected
-    
-    while rtsp_connected:
-        try:
-            frame_copy = None
-            async with lock:
-                if output_frame is None:
-                    # 如果没有可用帧，等待
-                    await asyncio.sleep(0.1)
-                    continue
-                frame_copy = output_frame.copy()
-            
-            # 编码帧为JPEG
-            success, buffer = cv2.imencode('.jpg', frame_copy, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
-            if not success:
-                await asyncio.sleep(0.1)
-                continue
-            
-            # 生成帧数据
-            frame_bytes = buffer.tobytes()
-            yield (b'--frame\r\n'
-                  b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-            
-            # 控制帧率
-            await asyncio.sleep(1/30)  # 约30FPS
-            
-        except Exception as e:
-            logger.error(f"生成视频流时出错: {str(e)}")
-            await asyncio.sleep(0.5)
-            
-    # 当连接断开时，发送一个黑色帧或消息帧
-    try:
-        # 创建一个黑色帧
-        black_frame = np.zeros((FRAME_HEIGHT, FRAME_WIDTH, 3), np.uint8)
-        cv2.putText(black_frame, "RTSP Stream Disconnected", (50, FRAME_HEIGHT//2),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-        
-        success, buffer = cv2.imencode('.jpg', black_frame)
-        if success:
-            frame_bytes = buffer.tobytes()
-            yield (b'--frame\r\n'
-                  b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-    except Exception as e:
-        logger.error(f"生成最终帧时出错: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
@@ -1745,12 +1734,10 @@ if __name__ == "__main__":
     
     # 打印启动信息
     print("=" * 50)
-    print(f"启动 Vi-Qwen-gemini-llama 应用")
+    print(f"启动 Video Analysis 应用")
     print(f"Python 版本: {sys.version}")
     print(f"操作系统: {platform.system()} {platform.release()}")
     print(f"工作目录: {os.getcwd()}")
-    print(f"Ollama 服务: {'启用' if ENABLE_OLLAMA else '禁用'}")
-    print(f"Ollama 服务器: {OLLAMA_BASE_URL}")
     print(f"模板目录: {TEMPLATES_DIR}")
     print(f"静态文件目录: {STATIC_DIR}")
     print("=" * 50)
@@ -1760,28 +1747,6 @@ if __name__ == "__main__":
         if not directory.exists():
             print(f"警告: 目录不存在，将创建: {directory}")
             directory.mkdir(exist_ok=True)
-    
-    # 检查Ollama服务
-    if ENABLE_OLLAMA:
-        print("正在检查Ollama服务...")
-        import asyncio
-        try:
-            # 创建一个事件循环来运行异步函数
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            # 运行测试连接函数
-            result = loop.run_until_complete(test_ollama_connection())
-            
-            if result:
-                print("Ollama服务连接成功")
-            else:
-                print("警告: Ollama服务连接失败，应用可能无法正常工作")
-                
-            # 关闭事件循环
-            loop.close()
-        except Exception as e:
-            print(f"错误: 检查Ollama服务时出错: {str(e)}")
     
     # 启动应用
     print("正在启动应用...")
