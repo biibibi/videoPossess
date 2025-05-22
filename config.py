@@ -3,6 +3,15 @@
 包含所有配置项，便于集中管理和修改
 """
 
+# config.py
+# 重要：请在部署环境中设置以下环境变量以保证API密钥安全：
+#   - GEMINI_API_KEY
+#   - MINIMAX_API_KEY
+#   - DASHSCOPE_API_KEY
+#   - MOONSHOT_API_KEY
+#   - ARK_API_KEY
+#   ...（根据实际模型需求添加）
+
 import os
 from pathlib import Path
 
@@ -45,7 +54,7 @@ for directory in [APP_CONFIG["upload_dir"], APP_CONFIG["frames_dir"],
 
 # Gemini 配置
 GEMINI_CONFIG = {
-    "api_key": "AIzaSyATUsT0Rp0SUW2qy-s5pUo8sOGHZlsSrRs",  # 更新的API密钥
+    "api_key": os.environ.get("GEMINI_API_KEY", ""),
     "model": "gemini-2.0-flash",  # 更新为您测试示例中使用的模型
     "temperature": 0.7,
     "max_output_tokens": 2048,
@@ -59,7 +68,7 @@ GEMINI_CONFIG = {
 }
 # MiniMax 配置
 MINIMAX_CONFIG = {
-    "api_key": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJHcm91cE5hbWUiOiJZankiLCJVc2VyTmFtZSI6IllqeSIsIkFjY291bnQiOiIiLCJTdWJqZWN0SUQiOiIxOTEwMzE3MTM1ODYzNzUwNzI2IiwiUGhvbmUiOiIxODY1NzYxODQzMyIsIkdyb3VwSUQiOiIxOTEwMzE3MTM1ODU1MzYyMTE4IiwiUGFnZU5hbWUiOiIiLCJNYWlsIjoiIiwiQ3JlYXRlVGltZSI6IjIwMjUtMDQtMTAgMjM6NTQ6MDMiLCJUb2tlblR5cGUiOjEsImlzcyI6Im1pbmltYXgifQ.VVQiLz2t_bN3TG9ra54f4DzPQQQ2NIgtQA_HmX64Yy0JKWWPLQaDQDpYuKgMCmHIi61lLtgsZWfAzCObpfpfMz7_0kLaCAP18Kg4MePOmabFacHukKV3aeBdES7-WtZGgVQEwl7MElM3PCEhd5LBuqbiJNNURA10sFGgk6mrlQ6h_6CigHD46Zmnf1urlPFO-kJRan8vOvSRPTOHOtcT6SU5QNhivggkUU0Lh1aRN9U3Xzuby1Jxb3IEPqyNTUQzLDHIEQuOfM_kNAnC3XjjyeqM4GFSa_UyofjJg67mVhKoiOaERLLqOx8zDK61k2B1x0aVM1gqkwFXFoa-zIIDHA",
+    "api_key": os.environ.get("MINIMAX_API_KEY", ""),
     "group_id": "1910317135855362118",
     "model": "MiniMax-Text-01",
     "base_url": "https://api.minimax.chat/v1",
@@ -70,7 +79,7 @@ MINIMAX_CONFIG = {
 
 # Qwen 配置
 QWEN_CONFIG = {
-    "api_key": os.getenv("DASHSCOPE_API_KEY", "sk-6b8b715aaea649f986375e79378787f1"),  # 添加之前设置的API密钥作为默认值
+    "api_key": os.environ.get("DASHSCOPE_API_KEY", ""),
     "base_url": "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
     "model": "qwen-vl-max-latest",  
     "timeout": 60,  # 增加超时时间到60秒
@@ -80,7 +89,7 @@ QWEN_CONFIG = {
 
 # Kimi (Moonshot) 配置
 KIMI_CONFIG = {
-    "api_key": os.environ.get("MOONSHOT_API_KEY", "sk-0Z1hLOuByQX07E8KMaO1MtkdPPqevAiTInmrNwmt8jSisdNd"),
+    "api_key": os.environ.get("MOONSHOT_API_KEY", ""),
     "base_url": "https://api.moonshot.cn/v1",
     "model": "moonshot-v1-8k-vision-preview",
     "temperature": 0.1,
@@ -89,7 +98,7 @@ KIMI_CONFIG = {
 
 # Douban (Volcengine) 配置
 DOUBAN_CONFIG = {
-    "api_key": os.environ.get("ARK_API_KEY", "41850bee-3d60-4246-9956-a1d143398926"),
+    "api_key": os.environ.get("ARK_API_KEY", ""),
     "model": "doubao-1-5-vision-pro-32k-250115",  # 更新为最新的豆包视觉模型ID
     "base_url": "https://ark.cn-beijing.volces.com/api/v3",  # 更新为官方文档中的基础URL
     "temperature": 0.7,
