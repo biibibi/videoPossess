@@ -29,6 +29,8 @@ import numpy as np
 from fastapi.responses import StreamingResponse
 from typing import List, Dict, Any, Callable, TypeVar, Awaitable, Optional, Union
 import inspect
+from pydantic import BaseModel
+import math
 
 # 导入特定模型的依赖
 try:
@@ -1445,7 +1447,114 @@ class ModelProcessor:
             traceback_info = traceback.format_exc()
             logger.debug(f"调用Gemini出错详细信息: {traceback_info}")
             return format_api_response(None, targets, error=f"{str(api_error)}", model_name="gemini")
-    
+
+    @staticmethod
+    async def summarize_video_with_gemini(image_data_list: List[str], prompt: str, targets: List[str] = None):
+        """
+        Summarizes a video using Google Gemini API with multiple frames.
+        Args:
+            image_data_list: A list of base64 encoded image strings.
+            prompt: The summarization prompt.
+            targets: Not directly used for summarization but kept for compatibility with format_api_response.
+        Returns:
+            A dictionary containing the summary or an error message.
+        """
+        try:
+            gemini_config = MODELS["gemini"]
+            api_key = gemini_config["api_key"]
+            model_name_config = gemini_config.get("name", "gemini-2.0-flash-exp") # Ensure this is a vision-capable model
+            # It's better to use a model specifically fine-tuned or known for multi-image understanding if available.
+            # For now, we use the configured vision model.
+            proxy = GEMINI_CONFIG.get("proxy", {})
+            start_time = time.time() # For logging API call duration
+
+            logger.info(f"开始调用Gemini API进行视频摘要，帧数: {len(image_data_list)}")
+
+            def run_gemini_summarization_api():
+                import google.generativeai as genai
+                import os
+
+                original_http_proxy = os.environ.get('HTTP_PROXY')
+                original_https_proxy = os.environ.get('HTTPS_PROXY')
+
+                try:
+                    if proxy.get("http"):
+                        os.environ['HTTP_PROXY'] = proxy.get("http")
+                    if proxy.get("https"):
+                        os.environ['HTTPS_PROXY'] = proxy.get("https")
+                    
+                    genai.configure(api_key=api_key)
+                    
+                    model_instance_name = model_name_config.split(':')[0] if ':' in model_name_config else model_name_config
+                    model = genai.GenerativeModel(model_instance_name)
+
+                    generation_config = {
+                        "temperature": gemini_config.get("temperature", 0.5), # May need different temp for summarization
+                        "top_p": gemini_config.get("top_p", 0.8),
+                        "top_k": gemini_config.get("top_k", 40),
+                        "max_output_tokens": gemini_config.get("max_output_tokens_summarization", 4096) # Potentially longer summaries
+                    }
+
+                    # Prepare image parts
+                    image_parts = []
+                    for b64_image_string in image_data_list:
+                        image_bytes = base64.b64decode(b64_image_string)
+                        image_parts.append({'mime_type': 'image/jpeg', 'data': image_bytes})
+                    
+                    # Construct the full prompt for the API call
+                    # The prompt should be the first element, followed by all image parts
+                    full_prompt_parts = [prompt] + image_parts
+                    
+                    # Log the size of the request payload (first few parts for brevity)
+                    logger.debug(f"Gemini summarization request: prompt='{prompt[:100]}...', num_images={len(image_parts)}")
+
+                    response = model.generate_content(
+                        full_prompt_parts,
+                        generation_config=generation_config,
+                        # Consider adding request_options for timeout if needed
+                    )
+                    
+                    if hasattr(response, 'text'):
+                        return response.text
+                    elif hasattr(response, 'parts'):
+                        return ''.join(part.text for part in response.parts if hasattr(part, 'text'))
+                    else:
+                        logger.warning(f"Gemini summarization response format unexpected: {response}")
+                        return str(response)
+                finally:
+                    if original_http_proxy:
+                        os.environ['HTTP_PROXY'] = original_http_proxy
+                    elif 'HTTP_PROXY' in os.environ:
+                        del os.environ['HTTP_PROXY']
+                        
+                    if original_https_proxy:
+                        os.environ['HTTPS_PROXY'] = original_https_proxy
+                    elif 'HTTPS_PROXY' in os.environ:
+                        del os.environ['HTTPS_PROXY']
+
+            summary_text = await run_in_thread(run_gemini_summarization_api)
+            api_call_time = time.time() - start_time
+            logger.info(f"Gemini视频摘要API调用完成，耗时: {api_call_time:.2f}秒")
+            logger.debug(f"Gemini视频摘要原始返回: {summary_text}")
+
+            return {
+                "summary": summary_text,
+                "model": "gemini",
+                "status": "success",
+                "timestamp": time.time()
+            }
+
+        except Exception as api_error:
+            logger.error(f"调用Gemini API进行视频摘要时出错: {str(api_error)}")
+            traceback_info = traceback.format_exc()
+            logger.debug(f"调用Gemini视频摘要出错详细信息: {traceback_info}")
+            return {
+                "message": f"Gemini API error during summarization: {str(api_error)}",
+                "model": "gemini",
+                "status": "error",
+                "timestamp": time.time()
+            }
+
     @staticmethod
     async def process_kimi(image_data, targets, system_message, user_message, start_time):
         """处理Moonshot Kimi模型的API调用"""
@@ -1728,6 +1837,158 @@ class ModelProcessor:
             return await cls.process_douban(image_data, targets, system_message, user_message, start_time)
         else:
             return await cls.process_unsupported(model_name, targets, start_time)
+
+
+# Pydantic model for video summarization request
+class VideoSummarizationRequest(BaseModel):
+    video_path: str
+    extraction_interval_seconds: int = 5
+    max_frames: int = 20 # Maximum frames to send to the model
+
+# Video Summarization Endpoint
+@app.post("/api/video/summarize")
+@api_error_handler(status_code=500)
+async def summarize_video(request: VideoSummarizationRequest):
+    """
+    Summarizes a video using Gemini API.
+    Extracts frames from the video, sends them to Gemini for summarization.
+    """
+    video_path = request.video_path
+    extraction_interval = request.extraction_interval_seconds
+    max_frames_to_process = request.max_frames
+
+    # --- 1. Validate video_path (basic check) ---
+    if not os.path.exists(video_path):
+        logger.error(f"Video file not found at path: {video_path}")
+        return create_api_response(
+            status="error",
+            message=f"Video file not found: {video_path}",
+            status_code=404
+        )
+    if not os.path.isfile(video_path):
+        logger.error(f"Path is not a file: {video_path}")
+        return create_api_response(
+            status="error",
+            message=f"Path is not a file: {video_path}",
+            status_code=400
+        )
+
+    logger.info(f"Starting video summarization for: {video_path} with interval {extraction_interval}s, max_frames {max_frames_to_process}")
+
+    extracted_frames_base64 = []
+    frames_processed_count = 0
+
+    try:
+        # --- 2. Video Frame Extraction Logic ---
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            logger.error(f"Could not open video file: {video_path}")
+            return create_api_response(status="error", message="Could not open video file.", status_code=500)
+
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration_seconds = total_frames / fps if fps > 0 else 0
+        logger.info(f"Video Info: FPS={fps}, Total Frames={total_frames}, Duration={duration_seconds:.2f}s")
+
+        if duration_seconds == 0:
+            cap.release()
+            logger.error(f"Video duration is zero or FPS is invalid: {video_path}")
+            return create_api_response(status="error", message="Video duration is zero or FPS is invalid.", status_code=400)
+
+        frame_indices_to_extract = []
+        current_time_sec = 0
+        while current_time_sec <= duration_seconds:
+            frame_indices_to_extract.append(int(current_time_sec * fps))
+            current_time_sec += extraction_interval
+            if len(frame_indices_to_extract) >= 500: # Safety break for very long videos / small intervals
+                logger.warning("Reached safety limit of 500 potential frames to extract. Breaking.")
+                break
+        
+        # Adjust frame selection if over max_frames_to_process
+        if len(frame_indices_to_extract) > max_frames_to_process:
+            logger.info(f"Extracted {len(frame_indices_to_extract)} frames, which is more than max_frames {max_frames_to_process}. Selecting a subset.")
+            step = len(frame_indices_to_extract) / max_frames_to_process
+            selected_indices = [frame_indices_to_extract[int(i * step)] for i in range(max_frames_to_process)]
+            frame_indices_to_extract = selected_indices
+
+        logger.info(f"Will attempt to extract {len(frame_indices_to_extract)} frames at indices: {frame_indices_to_extract[:5]}...")
+
+        for frame_idx in frame_indices_to_extract:
+            if frame_idx >= total_frames: # Ensure index is within bounds
+                continue
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+            ret, frame = cap.read()
+            if ret:
+                # Resize frame for consistency and to reduce data size (optional, but good practice)
+                # Example: resize to width 640, keeping aspect ratio
+                h, w, _ = frame.shape
+                target_w = 640
+                target_h = int(h * (target_w / w))
+                resized_frame = cv2.resize(frame, (target_w, target_h))
+
+                success, buffer = cv2.imencode('.jpg', resized_frame, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
+                if success:
+                    extracted_frames_base64.append(base64.b64encode(buffer).decode('utf-8'))
+                else:
+                    logger.warning(f"Failed to encode frame at index {frame_idx}")
+            else:
+                logger.warning(f"Failed to read frame at index {frame_idx}")
+        
+        frames_processed_count = len(extracted_frames_base64)
+        cap.release()
+        logger.info(f"Successfully extracted {frames_processed_count} frames from the video.")
+
+        if not extracted_frames_base64:
+            return create_api_response(status="error", message="No frames could be extracted from the video.", status_code=500)
+
+        # --- 3. Model Interaction for Summarization (Placeholder for now) ---
+        # This will be replaced by a call to ModelProcessor.summarize_with_gemini
+        # For now, a dummy summary:
+        # summary_text = f"Video processed. Extracted {frames_processed_count} frames."
+        
+        # --- Call ModelProcessor for summarization ---
+        summarization_prompt = (
+            "You will be provided with a sequence of frames from a video. "
+            "Please generate a concise textual summary of the key events, scenes, and objects depicted in these frames. "
+            "Focus on the overall narrative or main activities if possible. Aim for a summary of about 3-5 sentences."
+        )
+        
+        # Assuming ModelProcessor will have a method `summarize_with_gemini`
+        # This method needs to be implemented next.
+        summary_result = await ModelProcessor.summarize_video_with_gemini(
+            image_data_list=extracted_frames_base64,
+            prompt=summarization_prompt,
+            targets=[] # Not used for summarization but might be part of a generic signature
+        )
+
+        if summary_result.get("status") == "error":
+             return create_api_response(
+                status="error",
+                message=summary_result.get("message", "Summarization failed"),
+                model_used="gemini",
+                frames_processed=frames_processed_count,
+                status_code=500
+            )
+
+        summary_text = summary_result.get("summary", "No summary generated.")
+
+        # --- 4. Return Response ---
+        return create_api_response(
+            status="success",
+            summary=summary_text,
+            model_used="gemini",
+            frames_processed=frames_processed_count
+        )
+
+    except cv2.error as e:
+        logger.error(f"OpenCV error during video processing: {str(e)}")
+        traceback.print_exc()
+        return create_api_response(status="error", message=f"OpenCV error: {str(e)}", status_code=500)
+    except Exception as e:
+        logger.error(f"An unexpected error occurred during video summarization: {str(e)}")
+        traceback.print_exc()
+        return create_api_response(status="error", message=f"An unexpected error occurred: {str(e)}", status_code=500)
+
 
 if __name__ == "__main__":
     import uvicorn

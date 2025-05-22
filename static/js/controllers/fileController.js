@@ -54,6 +54,15 @@ const fileController = {
             
             uiController.showAlert(`开始抽帧，间隔${state.frameInterval}秒，共${state.totalFrames}帧`);
             await this.extractFrames();
+
+            // Store the video path (assuming file.name is usable by the backend)
+            state.uploadedVideoPath = file.name; 
+            
+            // Show the summarize button
+            const videoActions = document.getElementById('videoActions');
+            if (videoActions) {
+                videoActions.style.display = 'block';
+            }
             
         } catch (error) {
             console.error('初始化抽帧时出错:', error);
@@ -92,7 +101,67 @@ const fileController = {
             console.error('抽帧时出错:', error);
             uiController.showAlert('抽帧时出错', 'error');
         }
+    },
+
+    async handleSummarizeVideoClick() {
+        if (!state.uploadedVideoPath) {
+            uiController.showAlert('No video path available for summarization.', 'error');
+            console.error('Error: state.uploadedVideoPath is not set.');
+            return;
+        }
+
+        uiController.showVideoSummaryModal();
+        uiController.showSummaryLoading();
+
+        try {
+            const response = await fetch('/api/video/summarize', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                // Sending only video_path, backend will use defaults for other params
+                body: JSON.stringify({ video_path: state.uploadedVideoPath }), 
+            });
+
+            const data = await response.json();
+            uiController.hideSummaryLoading();
+
+            if (response.ok && data.status === 'success') {
+                uiController.updateVideoSummaryContent(data.summary, {
+                    model_used: data.model_used,
+                    frames_processed: data.frames_processed
+                });
+            } else {
+                uiController.showVideoSummaryError(data.message || 'Failed to summarize video.');
+                console.error('Summarization API error:', data.message);
+            }
+        } catch (error) {
+            uiController.hideSummaryLoading();
+            uiController.showVideoSummaryError('Network error or unexpected issue during summarization.');
+            console.error('Error calling summarization API:', error);
+        }
     }
 };
 
-export default fileController; 
+// Event listener for the summarize button (using event delegation)
+document.addEventListener('DOMContentLoaded', () => {
+    // Ensure elements are loaded before trying to attach listeners if not using delegation from document
+    const dropZone = document.getElementById('dropZone'); // Or any static parent of #videoActions
+    if (dropZone) {
+        dropZone.addEventListener('click', function(event) {
+            if (event.target.closest('.summarize-video-btn')) {
+                fileController.handleSummarizeVideoClick();
+            }
+        });
+    } else {
+        // Fallback to document if dropZone is not found immediately,
+        // though specific delegation is better.
+        document.addEventListener('click', function(event) {
+            if (event.target.closest('.summarize-video-btn')) {
+                fileController.handleSummarizeVideoClick();
+            }
+        });
+    }
+});
+
+export default fileController;

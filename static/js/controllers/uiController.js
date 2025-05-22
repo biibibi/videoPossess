@@ -101,7 +101,57 @@ const uiController = {
         valueElement.textContent = value;
         slider.value = value;
         slider.disabled = autoCheck.checked;
+    },
+
+    // Video Summary Modal Functions
+    showVideoSummaryModal() {
+        const modalElement = document.getElementById('videoSummaryModal');
+        if (modalElement) {
+            // Ensure Bootstrap 5 modal instance is created if it doesn't exist
+            const modalInstance = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+            modalInstance.show();
+        }
+    },
+
+    hideVideoSummaryModal() {
+        const modalElement = document.getElementById('videoSummaryModal');
+        if (modalElement) {
+            const modalInstance = bootstrap.Modal.getInstance(modalElement);
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+        }
+    },
+
+    showSummaryLoading() {
+        const loadingIndicator = document.getElementById('summaryLoadingIndicator');
+        const summaryContentArea = document.getElementById('summaryContentArea');
+        if (loadingIndicator) loadingIndicator.style.display = 'block';
+        if (summaryContentArea) summaryContentArea.innerHTML = ''; // Clear previous summary
+    },
+
+    hideSummaryLoading() {
+        const loadingIndicator = document.getElementById('summaryLoadingIndicator');
+        if (loadingIndicator) loadingIndicator.style.display = 'none';
+    },
+
+    updateVideoSummaryContent(summaryText, details) {
+        const summaryContentArea = document.getElementById('summaryContentArea');
+        if (summaryContentArea) {
+            let html = `<p>${summaryText.replace(/\n/g, '<br>')}</p>`;
+            if (details) {
+                html += `<hr><p><small>Model: ${details.model_used}<br>Frames Processed: ${details.frames_processed}</small></p>`;
+            }
+            summaryContentArea.innerHTML = html;
+        }
+    },
+
+    showVideoSummaryError(errorMessage) {
+        const summaryContentArea = document.getElementById('summaryContentArea');
+        if (summaryContentArea) {
+            summaryContentArea.innerHTML = `<div class="alert alert-danger" role="alert">${errorMessage}</div>`;
+        }
     }
 };
 
-export default uiController; 
+export default uiController;

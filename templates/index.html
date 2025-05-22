@@ -1230,8 +1230,13 @@
                                                 </div>
                     <video id="videoPreview" controls>
                         您的浏览器不支持 video 标签。
-                                                        </video>
-                                                            </div>
+                    </video>
+                    <div id="videoActions" class="mt-2" style="display: none;">
+                        <button class="btn btn-info btn-sm summarize-video-btn">
+                            <i class="bi bi-card-text"></i> Summarize Video
+                        </button>
+                    </div>
+                </div>
                 
                 <!-- 抽帧设置 -->
                 <div class="frame-settings mt-2">
@@ -4400,5 +4405,31 @@
             }
         }
     </script>
+
+    <!-- Video Summary Modal -->
+    <div class="modal fade" id="videoSummaryModal" tabindex="-1" aria-labelledby="videoSummaryModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="videoSummaryModalLabel">Video Summary</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="videoSummaryModalBody">
+                    <!-- Loading indicator -->
+                    <div id="summaryLoadingIndicator" class="text-center" style="display: none;">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p>Summarizing, please wait...</p>
+                    </div>
+                    <!-- Summary content will be injected here -->
+                    <div id="summaryContentArea"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

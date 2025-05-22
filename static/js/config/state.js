@@ -20,6 +20,7 @@ const state = {
     streamFrameTimer: null,
     streamExtractedFrames: [],
     isAnalyzing: false,
+    uploadedVideoPath: null, // To store the path of the video for summarization
     
     // 网络摄像头相关状态
     ipCameraActive: false,
