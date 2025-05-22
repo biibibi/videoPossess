@@ -3943,7 +3943,7 @@
                     
                     // 分析完成提示
                     uiController.showAlert('success', '智能分析完成');
-                    this.addIntelligentSystemMessage('分析完成');
+                    // 移除"分析完成"系统消息，避免结果卡片缩放
                 } catch (error) {
                     console.error('分析视频帧时出错:', error);
                     this.removeIntelligentAnalysisIndicator();
@@ -4025,7 +4025,7 @@
                     this.updateIntelligentAnalysisButtons('idle');
                     
                     uiController.showAlert('success', '图片分析完成');
-                    this.addIntelligentSystemMessage('分析完成');
+                    // 不再添加"分析完成"系统消息，避免结果显示界面缩放
                     
                 } catch (error) {
                     console.error('分析图片时出错:', error);
