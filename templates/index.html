@@ -2245,10 +2245,12 @@
                 elements.uploadBtn.className = 'btn btn-primary active';
                 elements.localCameraBtn.className = 'btn btn-outline-primary';
                 elements.ipCameraBtn.className = 'btn btn-outline-primary';
+                elements.imageBtn.className = 'btn btn-outline-primary';
                 
                 elements.uploadSection.classList.add('active');
                 elements.localCameraSection.classList.remove('active');
                 elements.ipCameraSection.classList.remove('active');
+                elements.imageSection.classList.remove('active');
                 
                 // 停止视频流（如果有）
                 streamController.stopStream();
@@ -2268,10 +2270,12 @@
                 elements.uploadBtn.className = 'btn btn-outline-primary';
                 elements.localCameraBtn.className = 'btn btn-primary active';
                 elements.ipCameraBtn.className = 'btn btn-outline-primary';
+                elements.imageBtn.className = 'btn btn-outline-primary';
                 
                 elements.uploadSection.classList.remove('active');
                 elements.localCameraSection.classList.add('active');
                 elements.ipCameraSection.classList.remove('active');
+                elements.imageSection.classList.remove('active');
                 
                 // 停止之前的视频流（如果有）
                 streamController.stopStream();
@@ -2285,10 +2289,12 @@
                 elements.uploadBtn.className = 'btn btn-outline-primary';
                 elements.localCameraBtn.className = 'btn btn-outline-primary';
                 elements.ipCameraBtn.className = 'btn btn-primary active';
+                elements.imageBtn.className = 'btn btn-outline-primary';
                 
                 elements.uploadSection.classList.remove('active');
                 elements.localCameraSection.classList.remove('active');
                 elements.ipCameraSection.classList.add('active');
+                elements.imageSection.classList.remove('active');
                 
                 // 停止之前的视频流（如果有）
                 streamController.stopStream();
