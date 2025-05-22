@@ -204,6 +204,26 @@
         .upload-area.has-video .upload-content {
             display: none;
         }
+        
+        .upload-area.has-image {
+            cursor: default;
+            padding: 1rem;
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            overflow: hidden;
+        }
+        
+        .upload-area.has-image img {
+            display: block;
+            max-width: 100%;
+            max-height: 360px;
+            margin: 0 auto;
+            border-radius: 8px;
+        }
+        
+        .upload-area.has-image .upload-content {
+            display: none;
+        }
 
         .upload-content {
             display: flex;
@@ -1188,6 +1208,9 @@
                     <button class="btn btn-outline-primary" id="ipCameraBtn" onclick="switchVideoMode('ipCamera')">
                                     <i class="bi bi-webcam"></i> 网络摄像头分析
                                 </button>
+                    <button class="btn btn-outline-primary" id="imageBtn" onclick="switchVideoMode('image')">
+                                    <i class="bi bi-image"></i> 图片分析
+                                </button>
                 </div>
             </div>
                             </div>
@@ -1284,6 +1307,24 @@
                         <i class="bi bi-info-circle"></i>
                         <span id="rtspStatusMessage"></span>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 图片分析区域 -->
+        <div class="card video-section" id="imageSection">
+            <div class="card-body">
+                <h5 class="section-title">
+                    <i class="bi bi-image"></i> 图片分析
+                </h5>
+                <div class="upload-area" id="imageDropZone">
+                    <input type="file" id="image-input" accept="image/jpeg,image/png,image/jpg,image/gif">
+                    <div class="upload-content">
+                        <i class="bi bi-image upload-icon"></i>
+                        <h5>拖放图片文件到这里</h5>
+                        <p class="upload-text">或者点击选择图片（支持JPG、PNG、GIF）</p>
+                    </div>
+                    <img id="imagePreview" style="display:none; max-width:100%; max-height:400px; margin:0 auto;">
                 </div>
             </div>
         </div>
@@ -1486,9 +1527,14 @@
                 this.uploadBtn = document.getElementById('uploadBtn');
                 this.localCameraBtn = document.getElementById('streamBtn'); // 保留ID但变量名改变
                 this.ipCameraBtn = document.getElementById('ipCameraBtn');
+                this.imageBtn = document.getElementById('imageBtn');
                 this.uploadSection = document.getElementById('uploadSection');
                 this.localCameraSection = document.getElementById('streamSection'); // 保留ID但变量名改变
                 this.ipCameraSection = document.getElementById('ipCameraSection');
+                this.imageSection = document.getElementById('imageSection');
+                this.imageDropZone = document.getElementById('imageDropZone');
+                this.imageInput = document.getElementById('image-input');
+                this.imagePreview = document.getElementById('imagePreview');
                 this.ipCameraVideo = document.getElementById('ipCameraVideo');
                 this.ipCameraInput = document.getElementById('ipCameraInput');
                 this.connectCameraBtn = document.getElementById('connectCameraBtn');
@@ -2157,6 +2203,8 @@
                         this.switchToStreamMode();
                     } else if (mode === 'ipCamera') {
                         this.switchToIPCameraMode();
+                    } else if (mode === 'image') {
+                        this.switchToImageMode();
                     }
                     
                     state.currentMode = mode;
@@ -2221,9 +2269,173 @@
                 
                 // 这里只显示UI，不实际启动摄像头
                 uiController.showAlert('info', '请输入网络摄像头地址并点击连接按钮');
+            },
+
+            switchToImageMode() {
+                elements.uploadBtn.className = 'btn btn-outline-primary';
+                elements.localCameraBtn.className = 'btn btn-outline-primary';
+                elements.ipCameraBtn.className = 'btn btn-outline-primary';
+                elements.imageBtn.className = 'btn btn-primary active';
+                
+                elements.uploadSection.classList.remove('active');
+                elements.localCameraSection.classList.remove('active');
+                elements.ipCameraSection.classList.remove('active');
+                elements.imageSection.classList.add('active');
+                
+                // 停止之前的视频流（如果有）
+                streamController.stopStream();
+                state.hasUploadedVideo = false;
+                
+                // 初始化图片上传区域
+                imageController.init();
+                
+                uiController.showAlert('info', '请上传图片文件');
             }
         };
 
+        // 图片控制器
+        const imageController = {
+            imageData: null,
+            hasImage: false,
+            
+            init() {
+                // 绑定图片处理事件
+                this.bindEvents();
+                
+                // 重置状态
+                this.resetState();
+            },
+            
+            resetState() {
+                this.imageData = null;
+                this.hasImage = false;
+                
+                // 重置UI
+                if (elements.imagePreview) {
+                    elements.imagePreview.style.display = 'none';
+                    elements.imagePreview.src = '';
+                }
+                
+                if (elements.imageDropZone) {
+                    elements.imageDropZone.classList.remove('has-image');
+                }
+                
+                const uploadContent = elements.imageDropZone.querySelector('.upload-content');
+                if (uploadContent) {
+                    uploadContent.style.display = 'flex';
+                }
+                
+                // 清除input值
+                if (elements.imageInput) {
+                    elements.imageInput.value = '';
+                }
+            },
+            
+            handleFile(file) {
+                if (!file) return;
+                
+                // 检查文件类型
+                if (!file.type.startsWith('image/')) {
+                    uiController.showAlert('error', '请上传图片文件（JPG、PNG、GIF）');
+                    return;
+                }
+                
+                // 检查文件大小
+                if (file.size > 10 * 1024 * 1024) { // 10MB限制
+                    uiController.showAlert('error', '图片文件过大，请上传小于10MB的图片');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                
+                reader.onload = (e) => {
+                    try {
+                        // 保存图片数据
+                        this.imageData = e.target.result;
+                        
+                        // 显示图片预览
+                        elements.imagePreview.src = this.imageData;
+                        elements.imagePreview.style.display = 'block';
+                        
+                        // 隐藏上传提示
+                        const uploadContent = elements.imageDropZone.querySelector('.upload-content');
+                        if (uploadContent) {
+                            uploadContent.style.display = 'none';
+                        }
+                        
+                        elements.imageDropZone.classList.add('has-image');
+                        this.hasImage = true;
+                        
+                        uiController.showAlert('success', '图片上传成功，可以开始分析');
+                    } catch (error) {
+                        console.error('处理图片时出错:', error);
+                        uiController.showAlert('error', '处理图片时出错，请重试');
+                        this.resetState();
+                    }
+                };
+                
+                reader.onerror = () => {
+                    console.error('读取图片文件时出错');
+                    uiController.showAlert('error', '读取图片文件时出错，请重试');
+                    this.resetState();
+                };
+                
+                // 读取文件
+                reader.readAsDataURL(file);
+            },
+            
+            // 获取当前图片的base64数据
+            getImageData() {
+                return this.imageData;
+            },
+            
+            bindEvents() {
+                // 拖放处理
+                elements.imageDropZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!this.hasImage) {
+                        elements.imageDropZone.style.borderColor = 'var(--primary-color)';
+                        elements.imageDropZone.style.backgroundColor = '#f8f9fa';
+                    }
+                });
+                
+                elements.imageDropZone.addEventListener('dragleave', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!this.hasImage) {
+                        elements.imageDropZone.style.borderColor = '#ccc';
+                        elements.imageDropZone.style.backgroundColor = 'white';
+                    }
+                });
+                
+                elements.imageDropZone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!this.hasImage) {
+                        const files = e.dataTransfer.files;
+                        if (files.length > 0) {
+                            this.handleFile(files[0]);
+                        }
+                    }
+                });
+                
+                // 点击上传
+                elements.imageDropZone.addEventListener('click', () => {
+                    if (!this.hasImage) {
+                        elements.imageInput.click();
+                    }
+                });
+                
+                // 文件选择
+                elements.imageInput.addEventListener('change', (e) => {
+                    if (e.target.files.length > 0) {
+                        this.handleFile(e.target.files[0]);
+                    }
+                });
+            }
+        };
+        
         // 事件处理器
         const eventHandlers = {
             handleDragOver: utils.throttle(function(e) {
@@ -2781,9 +2993,10 @@
                         return;
                     }
                     
-                    // 修改这里，添加网络摄像头支持
-                    if (!state.hasUploadedVideo && !state.localCameraActive && !state.ipCameraActive) {
-                        uiController.showAlert('error', '请先上传视频、启动本地摄像头或连接网络摄像头');
+                    // 修改这里，添加图片模式支持
+                    if (!state.hasUploadedVideo && !state.localCameraActive && !state.ipCameraActive && 
+                        !(state.currentMode === 'image' && imageController.hasImage)) {
+                        uiController.showAlert('error', '请先上传视频、图片、启动本地摄像头或连接网络摄像头');
                         return;
                     }
                     
@@ -2822,6 +3035,9 @@
                             // 使用内部方法作为备选
                             await this.startIpCameraAnalysis();
                         }
+                    } else if (state.currentMode === 'image' && imageController.hasImage) {
+                        uiController.showAlert('info', '开始图片分析');
+                        await this.analyzeImageData();
                     }
                     
                 } catch (error) {
@@ -3200,6 +3416,54 @@
                 }
             },
             
+            // 分析单张图片数据
+            async analyzeImageData() {
+                try {
+                    if (!imageController.hasImage) {
+                        uiController.showAlert('error', '没有有效的图片数据');
+                        this.stopAnalysis();
+                        return;
+                    }
+                    
+                    // 从imageController获取图片数据
+                    const imageData = imageController.getImageData();
+                    if (!imageData) {
+                        uiController.showAlert('error', '无法获取图片数据');
+                        this.stopAnalysis();
+                        return;
+                    }
+                    
+                    // 预处理图像
+                    const processedImage = await imagePreprocessor.preprocessImage(imageData);
+                    
+                    // 调用模型API进行分析
+                    const analysisResult = await this.callModelAPI(processedImage, state.searchTargets);
+                    
+                    // 添加分析结果
+                    searchResultController.addResult({
+                        timestamp: Date.now(),
+                        frameNumber: 1, // 单张图片只有一帧
+                        frameImage: processedImage,
+                        description: analysisResult.description,
+                        targets: analysisResult.targets,
+                        videoTime: null // 图片没有时间戳
+                    });
+                    
+                    // 更新结果显示
+                    searchResultController.sortResults();
+                    searchResultController.renderResults();
+                    
+                    // 完成分析
+                    uiController.showAlert('success', '图片分析完成');
+                    this.stopAnalysis(false);
+                    
+                } catch (error) {
+                    console.error('分析图片数据时出错:', error);
+                    uiController.showAlert('error', '分析图片时出错: ' + error.message);
+                    this.stopAnalysis();
+                }
+            },
+            
             stopAnalysis(showCompletionMessage = true) {
                 this.isAnalyzing = false;
                 this.processingQueue = [];
@@ -3227,6 +3491,8 @@
                         uiController.showAlert('info', '实时视频分析已停止');
                     } else if (state.ipCameraActive) { // 网络摄像头
                         uiController.showAlert('info', '网络摄像头分析已停止');
+                    } else if (state.currentMode === 'image') { // 图片分析
+                        uiController.showAlert('info', '图片分析已完成');
                     }
                 }
             }
