@@ -34,3 +34,5 @@ Thumbs.db
 # IDE配置
 .vscode/
 .idea/
+
+.env

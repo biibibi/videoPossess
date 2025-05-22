@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 # main.py
+from dotenv import load_dotenv
+load_dotenv()
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
