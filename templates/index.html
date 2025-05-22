@@ -3820,8 +3820,9 @@
                     }
                     
                     // 检查当前分析方式
-                    if (!state.hasUploadedVideo && !state.localCameraActive && !state.ipCameraActive) {
-                        uiController.showAlert('error', '请先上传视频、启动本地摄像头或连接网络摄像头');
+                    if (!state.hasUploadedVideo && !state.localCameraActive && !state.ipCameraActive && 
+                        !(state.currentMode === 'image' && imageController.hasImage)) {
+                        uiController.showAlert('error', '请先上传视频、图片、启动本地摄像头或连接网络摄像头');
                         return;
                     }
                     
@@ -3859,6 +3860,9 @@
                     } else if (state.ipCameraActive) {
                         uiController.showAlert('info', '开始分析网络摄像头画面');
                         this.analyzeIntelligentCameraFrame(message, 'ip');
+                    } else if (state.currentMode === 'image' && imageController.hasImage) {
+                        uiController.showAlert('info', '开始分析图片');
+                        this.analyzeIntelligentImage(message);
                     }
                 } catch (error) {
                     console.error('启动智能分析时出错:', error);
@@ -3975,6 +3979,61 @@
                             }
                 } catch (error) {
                     console.error('排序智能分析结果时出错:', error);
+                }
+            },
+            
+            // 分析单张图片
+            async analyzeIntelligentImage(message) {
+                try {
+                    console.log('开始分析图片');
+                    this.addIntelligentSystemMessage('正在分析图片...');
+                    
+                    // 从imageController获取图片数据
+                    const imageData = imageController.getImageData();
+                    if (!imageData) {
+                        uiController.showAlert('error', '无法获取图片数据');
+                        this.removeIntelligentAnalysisIndicator();
+                        this.isProcessing = false;
+                        this.isAnalyzing = false;
+                        this.updateIntelligentAnalysisButtons('idle');
+                        return;
+                    }
+                    
+                    // 预处理图像
+                    const processedImage = await imagePreprocessor.preprocessImage(imageData);
+                    
+                    // 调用模型API进行分析
+                    const result = await this.callIntelligentModelAPI(processedImage, message);
+                    
+                    // 添加结果
+                    this.chatResults.push({
+                        timestamp: Date.now(),
+                        frameNumber: 1, // 单张图片只有一帧
+                        frameImage: processedImage,
+                        message: message,
+                        response: result.response,
+                        videoTime: null // 图片没有时间戳
+                    });
+                    
+                    // 显示结果
+                    this.displayIntelligentAnalysisResults();
+                    
+                    // 分析完成
+                    this.removeIntelligentAnalysisIndicator();
+                    this.isProcessing = false;
+                    this.isAnalyzing = false;
+                    this.updateIntelligentAnalysisButtons('idle');
+                    
+                    uiController.showAlert('success', '图片分析完成');
+                    this.addIntelligentSystemMessage('分析完成');
+                    
+                } catch (error) {
+                    console.error('分析图片时出错:', error);
+                    this.removeIntelligentAnalysisIndicator();
+                    this.addIntelligentAnalysisMessage('assistant', `分析图片时出错: ${error.message || '未知错误'}`);
+                    this.isProcessing = false;
+                    this.isAnalyzing = false;
+                    this.updateIntelligentAnalysisButtons('idle');
                 }
             },
             
