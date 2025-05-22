@@ -1030,6 +1030,33 @@
                 transform: translateY(-5px);
             }
         }
+
+        /* 分析状态指示器样式 */
+        .analysis-status-indicator {
+            display: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            background-color: #f8f9fa;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .analysis-status-indicator .status-text {
+            font-size: 0.9rem;
+            color: #666;
+            margin-right: 1rem;
+        }
+
+        .analysis-status-indicator .progress {
+            height: 6px;
+            border-radius: 3px;
+        }
+
+        .analysis-status-indicator .progress-bar {
+            background-color: #4361ee;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
     </style>
 </head>
 <body>
@@ -2223,10 +2250,12 @@
                 elements.uploadBtn.className = 'btn btn-primary active';
                 elements.localCameraBtn.className = 'btn btn-outline-primary';
                 elements.ipCameraBtn.className = 'btn btn-outline-primary';
+                elements.imageBtn.className = 'btn btn-outline-primary';
                 
                 elements.uploadSection.classList.add('active');
                 elements.localCameraSection.classList.remove('active');
                 elements.ipCameraSection.classList.remove('active');
+                elements.imageSection.classList.remove('active');
                 
                 // 停止视频流（如果有）
                 streamController.stopStream();
@@ -2246,10 +2275,12 @@
                 elements.uploadBtn.className = 'btn btn-outline-primary';
                 elements.localCameraBtn.className = 'btn btn-primary active';
                 elements.ipCameraBtn.className = 'btn btn-outline-primary';
+                elements.imageBtn.className = 'btn btn-outline-primary';
                 
                 elements.uploadSection.classList.remove('active');
                 elements.localCameraSection.classList.add('active');
                 elements.ipCameraSection.classList.remove('active');
+                elements.imageSection.classList.remove('active');
                 
                 // 停止之前的视频流（如果有）
                 streamController.stopStream();
@@ -2263,10 +2294,12 @@
                 elements.uploadBtn.className = 'btn btn-outline-primary';
                 elements.localCameraBtn.className = 'btn btn-outline-primary';
                 elements.ipCameraBtn.className = 'btn btn-primary active';
+                elements.imageBtn.className = 'btn btn-outline-primary';
                 
                 elements.uploadSection.classList.remove('active');
                 elements.localCameraSection.classList.remove('active');
                 elements.ipCameraSection.classList.add('active');
+                elements.imageSection.classList.remove('active');
                 
                 // 停止之前的视频流（如果有）
                 streamController.stopStream();
@@ -3825,8 +3858,9 @@
                     }
                     
                     // 检查当前分析方式
-                    if (!state.hasUploadedVideo && !state.localCameraActive && !state.ipCameraActive) {
-                        uiController.showAlert('error', '请先上传视频、启动本地摄像头或连接网络摄像头');
+                    if (!state.hasUploadedVideo && !state.localCameraActive && !state.ipCameraActive && 
+                        !(state.currentMode === 'image' && imageController.hasImage)) {
+                        uiController.showAlert('error', '请先上传视频、图片、启动本地摄像头或连接网络摄像头');
                         return;
                     }
                     
@@ -3864,6 +3898,9 @@
                     } else if (state.ipCameraActive) {
                         uiController.showAlert('info', '开始分析网络摄像头画面');
                         this.analyzeIntelligentCameraFrame(message, 'ip');
+                    } else if (state.currentMode === 'image' && imageController.hasImage) {
+                        uiController.showAlert('info', '开始分析图片');
+                        this.analyzeIntelligentImage(message);
                     }
                 } catch (error) {
                     console.error('启动智能分析时出错:', error);
@@ -3887,7 +3924,8 @@
                     
                     // 更新UI显示开始分析
                     uiController.showAlert('info', `开始智能分析 ${frameCount} 帧, 间隔 ${frameInterval}秒`);
-                    this.addIntelligentSystemMessage(`开始分析，共 ${frameCount} 帧, 间隔 ${frameInterval}秒`);
+                    // 使用状态指示器显示开始分析信息
+                    this.showAnalysisStatus(`开始分析，共 ${frameCount} 帧, 间隔 ${frameInterval}秒`);
                     
                     // 批量处理所有帧
                     for (let i = 0; i < frameCount; i += batchSize) {
@@ -3924,8 +3962,9 @@
                         
                         // 更新进度显示，但减少更新频率，只在每处理10%的帧时更新一次
                         const progress = Math.min(((i + batchSize) / frameCount * 100), 100).toFixed(1);
-                        if (i + batchSize < frameCount && parseFloat(progress) % 10 < 1) {
-                            this.addIntelligentSystemMessage(`已分析 ${Math.min(i + batchSize, frameCount)}/${frameCount} 帧 (${progress}%)`);
+                        if (i + batchSize < frameCount) {
+                            // 使用状态指示器显示进度
+                            this.showAnalysisStatus(`已分析 ${Math.min(i + batchSize, frameCount)}/${frameCount} 帧`, parseFloat(progress));
                         }
                         
                         // 给UI线程一些时间更新
@@ -3944,7 +3983,7 @@
                     
                     // 分析完成提示
                     uiController.showAlert('success', '智能分析完成');
-                    this.addIntelligentSystemMessage('分析完成');
+                    // 移除"分析完成"系统消息，避免结果卡片缩放
                 } catch (error) {
                     console.error('分析视频帧时出错:', error);
                     this.removeIntelligentAnalysisIndicator();
@@ -3980,6 +4019,62 @@
                             }
                 } catch (error) {
                     console.error('排序智能分析结果时出错:', error);
+                }
+            },
+            
+            // 分析单张图片
+            async analyzeIntelligentImage(message) {
+                try {
+                    console.log('开始分析图片');
+                    // 不再添加"正在分析"系统消息，而是使用状态指示器
+                    this.showAnalysisStatus('正在分析图片...');
+                    
+                    // 从imageController获取图片数据
+                    const imageData = imageController.getImageData();
+                    if (!imageData) {
+                        uiController.showAlert('error', '无法获取图片数据');
+                        this.removeIntelligentAnalysisIndicator();
+                        this.isProcessing = false;
+                        this.isAnalyzing = false;
+                        this.updateIntelligentAnalysisButtons('idle');
+                        return;
+                    }
+                    
+                    // 预处理图像
+                    const processedImage = await imagePreprocessor.preprocessImage(imageData);
+                    
+                    // 调用模型API进行分析
+                    const result = await this.callIntelligentModelAPI(processedImage, message);
+                    
+                    // 添加结果
+                    this.chatResults.push({
+                        timestamp: Date.now(),
+                        frameNumber: 1, // 单张图片只有一帧
+                        frameImage: processedImage,
+                        message: message,
+                        response: result.response,
+                        videoTime: null // 图片没有时间戳
+                    });
+                    
+                    // 显示结果
+                    this.displayIntelligentAnalysisResults();
+                    
+                    // 分析完成
+                    this.removeIntelligentAnalysisIndicator();
+                    this.isProcessing = false;
+                    this.isAnalyzing = false;
+                    this.updateIntelligentAnalysisButtons('idle');
+                    
+                    uiController.showAlert('success', '图片分析完成');
+                    // 不再添加"分析完成"系统消息，避免结果显示界面缩放
+                    
+                } catch (error) {
+                    console.error('分析图片时出错:', error);
+                    this.removeIntelligentAnalysisIndicator();
+                    this.addIntelligentAnalysisMessage('assistant', `分析图片时出错: ${error.message || '未知错误'}`);
+                    this.isProcessing = false;
+                    this.isAnalyzing = false;
+                    this.updateIntelligentAnalysisButtons('idle');
                 }
             },
             
@@ -4139,33 +4234,14 @@
             
             // 显示智能分析打字指示器
             showIntelligentAnalysisIndicator() {
-                try {
-                    const chatHistory = document.getElementById('chatHistory');
-                    const typingDiv = document.createElement('div');
-                    typingDiv.className = 'chat-message assistant typing-indicator';
-                    typingDiv.id = 'typingIndicator';
-                    typingDiv.innerHTML = '<span>正在分析中</span><span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>';
-                    chatHistory.appendChild(typingDiv);
-                    chatHistory.scrollTop = chatHistory.scrollHeight;
-                    const dots = typingDiv.querySelectorAll('.dot');
-                    dots.forEach((dot, index) => {
-                        dot.style.animationDelay = `${index * 0.3}s`;
-                    });
-                } catch (error) {
-                    console.error('显示智能分析打字指示器时出错:', error);
-                }
+                // 显示分析指示器
+                this.showAnalysisStatus('正在准备分析...');
             },
             
             // 移除智能分析打字指示器
             removeIntelligentAnalysisIndicator() {
-                try {
-                    const typingIndicator = document.getElementById('typingIndicator');
-                    if (typingIndicator) {
-                        typingIndicator.remove();
-                    }
-                } catch (error) {
-                    console.error('移除智能分析打字指示器时出错:', error);
-                }
+                // 隐藏分析指示器
+                this.hideAnalysisStatus();
             },
             
             // 清空智能分析历史
@@ -4253,7 +4329,8 @@
                     if (continueFromIndex === null) {
                         this.currentFrameIndex = 0;
                         // 首次启动时显示分析开始提示
-                        this.addIntelligentSystemMessage(`开始分析${cameraType === 'local' ? '本地' : '网络'}摄像头画面`);
+                        // 使用状态指示器显示开始分析信息
+                        this.showAnalysisStatus(`开始分析${cameraType === 'local' ? '本地' : '网络'}摄像头画面`);
                     }
                     
                     // 创建帧收集循环
@@ -4311,7 +4388,8 @@
                             if (this.isAnalyzing) {
                                 // 每10帧更新一次进度提示（而不是每批次都提示）
                                 if (this.currentFrameIndex % 10 === 0) {
-                                    this.addIntelligentSystemMessage(`已分析 ${this.currentFrameIndex} 帧`);
+                                    // 使用状态指示器显示进度
+                                    this.showAnalysisStatus(`已分析 ${this.currentFrameIndex} 帧`);
                                 }
                                 
                                 // 传递当前帧索引，保持递增
@@ -4329,6 +4407,33 @@
                     this.addIntelligentAnalysisMessage('assistant', `分析摄像头画面时出错: ${error.message || '未知错误'}`);
                     this.isProcessing = false;
                     this.isAnalyzing = false;
+                }
+            },
+            
+            // 添加显示分析状态的方法
+            showAnalysisStatus(message, progress = -1) {
+                const statusIndicator = document.getElementById('analysisStatusIndicator');
+                const statusText = document.getElementById('analysisStatusText');
+                const progressBar = document.getElementById('analysisProgressBar');
+                
+                if (!statusIndicator || !statusText || !progressBar) return;
+                
+                // 显示状态区
+                statusIndicator.style.display = 'block';
+                statusText.textContent = message;
+                
+                // 设置进度条，如果提供了进度
+                if (progress >= 0) {
+                    progressBar.style.width = `${progress}%`;
+                    progressBar.setAttribute('aria-valuenow', progress);
+                }
+            },
+            
+            // 隐藏分析状态
+            hideAnalysisStatus() {
+                const statusIndicator = document.getElementById('analysisStatusIndicator');
+                if (statusIndicator) {
+                    statusIndicator.style.display = 'none';
                 }
             },
         };
