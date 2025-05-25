@@ -720,6 +720,92 @@ async def analyze_image(request: Request):
     # 确保返回标准JSON格式，使用JSONResponse显式序列化
     return JSONResponse(content=result)
 
+# 特定场景分析API端点
+@app.post("/api/analyze-scenario")
+@api_error_handler(status_code=500)
+async def analyze_scenario(request: Request):
+    """
+    特定场景分析API端点
+    
+    接收图像和场景提示，调用相应的模型进行场景分析
+    """
+    start_time = time.time()
+    
+    # 记录请求时间
+    logger.info(f"收到特定场景分析请求: 处理开始时间={start_time}")
+    
+    # 解析请求数据
+    data = await request.json()
+    model_name = data.get("model", "")
+    image = data.get("image", "")
+    prompt = data.get("prompt", "")
+    
+    # 验证请求数据
+    if not model_name or not image or not prompt:
+        logger.warning(f"请求参数不完整: model={model_name}, image={'有' if image else '无'}, prompt={'有' if prompt else '无'}")
+        return create_api_response(
+            status="error",
+            message="缺少必要的请求参数",
+            status_code=400
+        )
+    
+    # 创建分析目标，将prompt作为目标提示
+    targets = ["mode=intelligent_analysis", prompt]
+    
+    # 使用统一的模型处理器处理请求
+    result = await ModelProcessor.process(model_name, image, targets, start_time)
+    
+    # 添加处理时间信息
+    processing_time = time.time() - start_time
+    if isinstance(result, dict):
+        result["processing_time"] = processing_time
+    # 确保结果始终包含时间戳，保证排序的正确性
+    if "timestamp" not in result:
+        result["timestamp"] = time.time()
+    
+    # 提取响应文本并简化返回结果
+    # 改进文本提取逻辑，增加更多字段检查
+    text = None
+    
+    # 按优先级检查不同的文本字段
+    if isinstance(result, dict):
+        # 1. 首先检查response字段
+        if "response" in result and result["response"]:
+            text = result["response"]
+        # 2. 然后检查description字段
+        elif "description" in result and result["description"]:
+            text = result["description"]
+        # 3. 检查content字段
+        elif "content" in result and result["content"]:
+            text = result["content"]
+        # 4. 检查text字段
+        elif "text" in result and result["text"]:
+            text = result["text"]
+        # 5. 最后尝试将整个结果转为字符串
+        elif result:
+            # 记录无法识别的结果格式
+            logger.warning(f"场景分析返回了未知格式的结果: {result}")
+            try:
+                # 尝试JSON序列化整个结果
+                text = json.dumps(result, ensure_ascii=False)
+            except:
+                # 如果无法序列化，则直接转为字符串
+                text = str(result)
+    
+    # 如果所有尝试都失败，使用默认文本
+    if not text:
+        logger.error(f"无法从结果中提取文本内容: {result}")
+        text = "无法获取分析结果。请检查模型配置和API连接状态。"
+    
+    simplified_result = {
+        "text": text,
+        "status": "success",
+        "timestamp": result.get("timestamp", time.time())
+    }
+    
+    # 确保返回标准JSON格式，使用JSONResponse显式序列化
+    return JSONResponse(content=simplified_result)
+
 system_prompts = {
     "minimax": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。",
     "gemini": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。",
@@ -1673,32 +1759,41 @@ class ModelProcessor:
         Returns:
             处理结果
         """
+        # 添加详细日志记录
+        request_id = f"req_{int(time.time()*1000)}"
+        is_intelligent_mode = len(targets) >= 2 and "mode=intelligent_analysis" in targets
+        mode_str = "智能分析模式" if is_intelligent_mode else "目标搜索模式"
+        
+        logger.info(f"[{request_id}] 开始处理{mode_str}请求: 模型={model_name}, 目标数={len(targets)}")
+        if is_intelligent_mode and len(targets) > 1:
+            logger.info(f"[{request_id}] 分析提示: {targets[1][:100]}...")
+        
         # 参数验证
         if not model_name:
-            logger.warning("没有提供模型名称，使用默认模型")
+            logger.warning(f"[{request_id}] 没有提供模型名称，使用默认模型")
             model_name = "minimax"  # 默认使用minimax模型
         
         if not image:
-            logger.error("没有提供图像数据")
+            logger.error(f"[{request_id}] 没有提供图像数据")
             return format_api_response(None, targets, error="没有提供图像数据", model_name=model_name)
         
         # 处理搜索目标
         if not targets or not isinstance(targets, list):
-            logger.warning("无效的搜索目标列表，使用默认目标")
+            logger.warning(f"[{request_id}] 无效的搜索目标列表，使用默认目标")
             targets = ["人物", "物体"]
         
         # 处理base64图像数据
         try:
             image_data = image.split(',')[1] if ',' in image else image
         except Exception as e:
-            logger.error(f"处理图像数据失败: {str(e)}")
+            logger.error(f"[{request_id}] 处理图像数据失败: {str(e)}")
             return format_api_response(None, targets, error="图像数据格式无效", model_name=model_name)
         
         # 使用PromptGenerator生成提示词
         try:
             system_message, user_message = PromptGenerator.generate_messages(targets, model_name)
         except Exception as e:
-            logger.error(f"生成提示词失败: {str(e)}")
+            logger.error(f"[{request_id}] 生成提示词失败: {str(e)}")
             # 创建默认消息
             system_message = {"role": "system", "content": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。"}
             target_text = "、".join(targets) if targets else "内容"
@@ -1708,26 +1803,58 @@ class ModelProcessor:
             }
         
         # 根据模型选择处理方法
-        if model_name == "minimax":
-            return await cls.process_minimax(image_data, targets, system_message, user_message, start_time)
-        elif model_name == "qwen":
-            return await cls.process_qwen(image_data, targets, system_message, user_message, start_time)
-        elif model_name == "gemini":
-            return await cls.process_gemini(image_data, targets, system_message, user_message, start_time)
-        elif model_name == "kimi":
-            return await cls.process_kimi(image_data, targets, system_message, user_message, start_time)
-        elif model_name == "douban":
-            # 检查volcengine豆包SDK是否可用
-            if not ARK_IMPORTED:
-                return format_api_response(
-                    None, 
-                    targets, 
-                    error="火山引擎豆包SDK未安装，请执行 pip install volcengine-python-sdk", 
-                    model_name="douban"
-                )
-            return await cls.process_douban(image_data, targets, system_message, user_message, start_time)
-        else:
-            return await cls.process_unsupported(model_name, targets, start_time)
+        process_start_time = time.time()
+        result = None
+        
+        try:
+            if model_name == "minimax":
+                result = await cls.process_minimax(image_data, targets, system_message, user_message, start_time)
+            elif model_name == "qwen":
+                result = await cls.process_qwen(image_data, targets, system_message, user_message, start_time)
+            elif model_name == "gemini":
+                result = await cls.process_gemini(image_data, targets, system_message, user_message, start_time)
+            elif model_name == "kimi":
+                result = await cls.process_kimi(image_data, targets, system_message, user_message, start_time)
+            elif model_name == "douban":
+                # 检查volcengine豆包SDK是否可用
+                if not ARK_IMPORTED:
+                    result = format_api_response(
+                        None, 
+                        targets, 
+                        error="火山引擎豆包SDK未安装，请执行 pip install volcengine-python-sdk", 
+                        model_name="douban"
+                    )
+                else:
+                    result = await cls.process_douban(image_data, targets, system_message, user_message, start_time)
+            else:
+                result = await cls.process_unsupported(model_name, targets, start_time)
+            
+            # 记录处理结果
+            process_time = time.time() - process_start_time
+            
+            # 针对不同模式记录不同类型的日志
+            if is_intelligent_mode:
+                response_preview = ""
+                if isinstance(result, dict) and "response" in result:
+                    response_preview = result["response"][:100] + "..." if result["response"] and len(result["response"]) > 100 else result["response"]
+                elif isinstance(result, dict) and "description" in result:
+                    response_preview = result["description"][:100] + "..." if result["description"] and len(result["description"]) > 100 else result["description"]
+                
+                logger.info(f"[{request_id}] 处理完成: 模型={model_name}, 耗时={process_time:.2f}秒, 结果预览={response_preview}")
+            else:
+                # 目标搜索模式，记录找到的目标数
+                found_count = 0
+                if isinstance(result, dict) and "targets" in result and isinstance(result["targets"], list):
+                    found_count = sum(1 for t in result["targets"] if t.get("found", False))
+                
+                logger.info(f"[{request_id}] 处理完成: 模型={model_name}, 耗时={process_time:.2f}秒, 目标总数={len(targets)}, 找到={found_count}")
+            
+            return result
+            
+        except Exception as e:
+            process_time = time.time() - process_start_time
+            logger.error(f"[{request_id}] 处理异常: 模型={model_name}, 耗时={process_time:.2f}秒, 错误={str(e)}")
+            return format_api_response(None, targets, error=f"处理时出错: {str(e)}", model_name=model_name)
 
 if __name__ == "__main__":
     import uvicorn

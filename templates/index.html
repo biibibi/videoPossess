@@ -918,9 +918,9 @@
         .chat-history {
             height: 300px;
             overflow-y: auto;
-            padding: 0.5rem;
+            padding: 1rem;
             background-color: #f8f9fa;
-            border-radius: 0.5rem;
+            border-radius: 8px;
         }
         
         .chat-message {
@@ -950,7 +950,7 @@
             margin-right: auto;
             border-bottom-left-radius: 0.25rem;
         }
-
+        
         /* 添加样式支持带图像的消息 */
         .chat-message.with-image {
             max-width: 95%;
@@ -964,7 +964,7 @@
             max-width: 100%;
             text-align: center;
         }
-
+        
         .chat-message .image-container img {
             max-width: 100%;
             max-height: 200px;
@@ -1046,7 +1046,7 @@
             color: #666;
             margin-right: 1rem;
         }
-
+        
         .analysis-status-indicator .progress {
             height: 6px;
             border-radius: 3px;
@@ -1056,6 +1056,103 @@
             background-color: #4361ee;
             width: 0%;
             transition: width 0.3s ease;
+        }
+        
+        /* 特定场景样式 */
+        .scenario-option {
+            width: 110px;
+            height: 70px; /* 从90px减小到70px */
+            border-radius: 10px;
+            background-color: #f8f9fa;
+            border: 2px solid #dee2e6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            padding: 0.5rem; /* 从0.75rem减小到0.5rem */
+        }
+        
+        .scenario-option:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary-color);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .scenario-option.selected {
+            background-color: #e6f4ff;
+            border-color: var(--primary-color);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .scenario-icon {
+            font-size: 1.75rem; /* 从2rem减小到1.75rem */
+            color: var(--primary-color);
+            margin-bottom: 0.3rem; /* 从0.5rem减小到0.3rem */
+        }
+        
+        .scenario-name {
+            font-size: 0.85rem; /* 从0.9rem减小到0.85rem */
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .scenario-result {
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            border-left: 4px solid var(--primary-color);
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .scenario-timestamp {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+        
+        .scenario-result-content {
+            display: flex;
+            gap: 1rem;
+        }
+        
+        .scenario-frame {
+            width: 240px;
+            height: 135px;
+            background: #000;
+            border-radius: 6px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        
+        .scenario-frame img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .scenario-info {
+            flex: 1;
+        }
+        
+        .scenario-description {
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        
+        .scenario-video-time {
+            font-size: 0.85rem;
+            color: var(--primary-color);
+            font-weight: 500;
+            margin-top: 0.5rem;
+        }
+        
+        .section-subtitle {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 0.5rem;
         }
     </style>
 </head>
@@ -1369,6 +1466,9 @@
                     <button class="btn btn-outline-primary" id="newFeatureBtn" onclick="switchFeatureMode('newFeature')">
                         <i class="bi bi-magic"></i> 智能分析
                     </button>
+                    <button class="btn btn-outline-primary" id="scenarioModeBtn" onclick="switchFeatureMode('scenario')">
+                        <i class="bi bi-building-gear"></i> 特定场景
+                    </button>
                 </div>
             </div>
         </div>
@@ -1461,6 +1561,72 @@
                                         <p class="mt-2">智能分析结果</p>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 特定场景卡片 -->
+        <div class="card mb-4 feature-section" id="scenarioCard" style="display: none;">
+            <div class="card-body">
+                <h5 class="section-title">
+                    <i class="bi bi-building-gear"></i> 特定场景
+                </h5>
+                <!-- 场景选择卡片 -->
+                <div class="card mb-3">
+                    <div class="card-body py-2">
+                        <h6 class="section-subtitle mb-2">
+                            <i class="bi bi-list-check"></i> 场景选择
+                        </h6>
+                        <div class="d-flex flex-wrap justify-content-center gap-3 mt-2">
+                            <div class="scenario-option" data-scenario="server-room">
+                                <div class="scenario-icon">
+                                    <i class="bi bi-hdd-rack"></i>
+                                </div>
+                                <div class="scenario-name">机房监测</div>
+                            </div>
+                            <div class="scenario-option" data-scenario="pollution">
+                                <div class="scenario-icon">
+                                    <i class="bi bi-trash"></i>
+                                </div>
+                                <div class="scenario-name">污染防治</div>
+                            </div>
+                            <div class="scenario-option" data-scenario="fire">
+                                <div class="scenario-icon">
+                                    <i class="bi bi-fire"></i>
+                                </div>
+                                <div class="scenario-name">火灾检测</div>
+                            </div>
+                            <div class="scenario-option" data-scenario="custom">
+                                <div class="scenario-icon">
+                                    <i class="bi bi-plus-circle"></i>
+                                </div>
+                                <div class="scenario-name">待添加</div>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <button class="btn btn-success btn-sm" type="button" id="startScenarioBtn">
+                                    <i class="bi bi-play-fill"></i> 开始分析
+                                </button>
+                                <button class="btn btn-danger btn-sm ms-2" type="button" id="stopScenarioBtn" style="display:none;">
+                                    <i class="bi bi-stop-fill"></i> 停止
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 场景分析结果卡片 -->
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="section-subtitle">
+                            <i class="bi bi-clipboard-data"></i> 场景分析结果
+                        </h6>
+                        <div id="scenarioResultsContainer" class="mt-3" style="height: 300px; overflow-y: auto;">
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-buildings" style="font-size: 2rem;"></i>
+                                <p class="mt-2">请选择场景并开始分析</p>
                             </div>
                         </div>
                     </div>
@@ -2069,6 +2235,8 @@
                                 state.streamExtractedFrames.push({
                                     time: exactTime, // 使用精确的时间点
                                     dataUrl: frameDataUrl,
+                                    data: frameDataUrl, // 同时添加data属性以保持一致性
+                                    timestamp: new Date().getTime(), // 添加timestamp属性以与其他模块保持一致
                                     extracted: new Date().getTime() // 添加提取时间戳
                                 });
                                 
@@ -3701,6 +3869,7 @@
                 // 更新按钮状态
                 const searchModeBtn = document.getElementById('searchModeBtn');
                 const newFeatureBtn = document.getElementById('newFeatureBtn');
+                const scenarioModeBtn = document.getElementById('scenarioModeBtn');
                 
                 if (mode === 'search') {
                     // 激活搜索模式
@@ -3711,6 +3880,10 @@
                     newFeatureBtn.classList.remove('active');
                     newFeatureBtn.classList.remove('btn-primary');
                     newFeatureBtn.classList.add('btn-outline-primary');
+                    
+                    scenarioModeBtn.classList.remove('active');
+                    scenarioModeBtn.classList.remove('btn-primary');
+                    scenarioModeBtn.classList.add('btn-outline-primary');
                     
                     // 显示搜索相关卡片，隐藏新功能卡片
                     document.querySelectorAll('.feature-section').forEach(section => {
@@ -3740,6 +3913,10 @@
                     searchModeBtn.classList.remove('btn-primary');
                     searchModeBtn.classList.add('btn-outline-primary');
                     
+                    scenarioModeBtn.classList.remove('active');
+                    scenarioModeBtn.classList.remove('btn-primary');
+                    scenarioModeBtn.classList.add('btn-outline-primary');
+                    
                     // 显示新功能卡片，隐藏搜索相关卡片
                     document.querySelectorAll('.feature-section').forEach(section => {
                         section.classList.remove('active');
@@ -3751,9 +3928,34 @@
                         newFeatureCard.classList.add('active');
                         newFeatureCard.style.display = 'block';
                     }
+                } else if (mode === 'scenario') {
+                    // 激活特定场景模式
+                    scenarioModeBtn.classList.add('active');
+                    scenarioModeBtn.classList.remove('btn-outline-primary');
+                    scenarioModeBtn.classList.add('btn-primary');
+                    
+                    searchModeBtn.classList.remove('active');
+                    searchModeBtn.classList.remove('btn-primary');
+                    searchModeBtn.classList.add('btn-outline-primary');
+                    
+                    newFeatureBtn.classList.remove('active');
+                    newFeatureBtn.classList.remove('btn-primary');
+                    newFeatureBtn.classList.add('btn-outline-primary');
+                    
+                    // 显示特定场景卡片，隐藏搜索相关卡片和新功能卡片
+                    document.querySelectorAll('.feature-section').forEach(section => {
+                        section.classList.remove('active');
+                        section.style.display = 'none';
+                    });
+                    
+                    const scenarioCard = document.getElementById('scenarioCard');
+                    if (scenarioCard) {
+                        scenarioCard.classList.add('active');
+                        scenarioCard.style.display = 'block';
+                    }
                 }
                 
-                console.log(`已切换到${mode === 'search' ? '搜索目标' : '智能分析'}模式`);
+                console.log(`已切换到${mode === 'search' ? '搜索目标' : mode === 'newFeature' ? '智能分析' : '特定场景'}模式`);
             } catch (error) {
                 console.error('切换功能模式时出错:', error);
             }
@@ -4433,9 +4635,10 @@
             },
         };
         
-        // 在DOMContentLoaded时初始化智能分析控制器
+        // 在DOMContentLoaded时初始化智能分析控制器和特定场景控制器
         document.addEventListener('DOMContentLoaded', () => {
             intelligentAnalysisController.init();
+            scenarioController.init();  // 初始化特定场景控制器
             
             // 为智能分析结果容器添加额外的样式
             const chatHistory = document.getElementById('chatHistory');
@@ -4504,6 +4707,591 @@
                 modeController.switchMode(mode);
             }
         }
+    </script>
+    
+    <!-- 特定场景控制器 -->
+    <script>
+        // 特定场景控制器
+        const scenarioController = {
+            selectedScenario: null,
+            isAnalyzing: false,
+            scenarioFrameBuffer: [],
+            currentFrameIndex: 0,
+            
+            // 初始化
+            init() {
+                try {
+                    // 绑定场景选项点击事件
+                    const scenarioOptions = document.querySelectorAll('.scenario-option');
+                    scenarioOptions.forEach(option => {
+                        option.addEventListener('click', () => {
+                            // 取消所有选中状态
+                            scenarioOptions.forEach(opt => opt.classList.remove('selected'));
+                            // 选中当前选项
+                            option.classList.add('selected');
+                            // 保存选中的场景
+                            this.selectedScenario = option.dataset.scenario;
+                            console.log(`已选择场景: ${this.selectedScenario}`);
+                        });
+                    });
+                    
+                    // 绑定开始分析按钮事件
+                    const startBtn = document.getElementById('startScenarioBtn');
+                    const stopBtn = document.getElementById('stopScenarioBtn');
+                    
+                    if (startBtn) {
+                        startBtn.addEventListener('click', () => {
+                            this.startScenarioAnalysis();
+                        });
+                    }
+                    
+                    if (stopBtn) {
+                        stopBtn.addEventListener('click', () => {
+                            this.stopScenarioAnalysis();
+                        });
+                    }
+                } catch (error) {
+                    console.error('初始化特定场景控制器时出错:', error);
+                }
+            },
+            
+            // 更新分析按钮状态
+            updateScenarioButtons(state) {
+                const startBtn = document.getElementById('startScenarioBtn');
+                const stopBtn = document.getElementById('stopScenarioBtn');
+                
+                if (state === 'analyzing') {
+                    startBtn.disabled = true;
+                    startBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> 分析中...';
+                    stopBtn.style.display = 'inline-block'; // 显示停止按钮
+                } else {
+                    startBtn.disabled = false;
+                    startBtn.innerHTML = '<i class="bi bi-play-fill"></i> 开始分析';
+                    stopBtn.style.display = 'none'; // 隐藏停止按钮
+                }
+            },
+            
+            // 开始场景分析
+            startScenarioAnalysis() {
+                try {
+                    if (this.isAnalyzing) {
+                        uiController.showAlert('info', '分析已在进行中');
+                        return;
+                    }
+                    
+                    if (!this.selectedScenario) {
+                        uiController.showAlert('error', '请先选择一个场景');
+                        return;
+                    }
+                    
+                    // 检查当前分析方式
+                    if (!state.hasUploadedVideo && !state.localCameraActive && !state.ipCameraActive && 
+                        !(state.currentMode === 'image' && imageController.hasImage)) {
+                        uiController.showAlert('error', '请先上传视频、图片、启动本地摄像头或连接网络摄像头');
+                        return;
+                    }
+                    
+                    // 设置分析状态
+                    this.isAnalyzing = true;
+                    this.currentFrameIndex = 0;
+                    this.scenarioFrameBuffer = [];
+                    // 清除已分析时间点记录
+                    this.analyzedVideoTimes = new Set();
+                    // 重置待处理请求计数
+                    this.pendingRequests = 0;
+                    
+                    // 更新按钮状态
+                    this.updateScenarioButtons('analyzing');
+                    
+                    // 清空结果区域
+                    this.clearScenarioResults();
+                    
+                    // 添加加载提示
+                    this.addLoadingIndicator();
+                    
+                    // 设置提示语
+                    let prompt = '';
+                    switch (this.selectedScenario) {
+                        case 'server-room':
+                            prompt = '分析当前画面：1. 交换机是否出现指示灯异常、端口故障等问题？2. 画面中是否有人员经过？如有，描述其位置和行为。3. 设备是否有过热、冒烟等异常情况？';
+                            break;
+                        case 'pollution':
+                            prompt = '分析当前画面：1. 是否存在垃圾乱扔现象？2. 如有垃圾，描述其类型、位置和数量。3. 周围环境是否整洁？4. 是否有人正在进行不当处理废弃物的行为？';
+                            break;
+                        case 'fire':
+                            prompt = '分析当前画面：1. 是否存在明火、烟雾或其他火灾迹象？2. 如有火情，描述火势大小、位置和蔓延趋势。3. 画面中是否有易燃物品处于危险位置？4. 是否有人员被困在火场中？';
+                            break;
+                        case 'custom':
+                            prompt = '请分析画面中的异常情况，包括但不限于设备故障、环境异常、安全隐患等。';
+                            break;
+                        default:
+                            prompt = '请分析画面中可能存在的异常情况。';
+                    }
+                    
+                    // 根据当前模式获取帧
+                    if (state.localCameraActive || state.ipCameraActive) {
+                        // 实时摄像头模式 - 抓取当前帧并分析
+                        this.captureAndAnalyzeCurrentFrame(prompt);
+                    } else if (state.hasUploadedVideo) {
+                        // 视频模式 - 定时抓取帧并分析
+                        const frameInterval = CONFIG.defaultFrameInterval * 1000; // 转换为毫秒
+                        this.analyzeVideoFrames(prompt, frameInterval);
+                    } else if (state.currentMode === 'image' && imageController.hasImage) {
+                        // 图片模式 - 直接分析图片
+                        this.analyzeImage(prompt);
+                    }
+                } catch (error) {
+                    console.error('启动场景分析时出错:', error);
+                    this.stopScenarioAnalysis();
+                    uiController.showAlert('error', '启动场景分析时出错');
+                }
+            },
+            
+            // 停止场景分析
+            stopScenarioAnalysis() {
+                this.isAnalyzing = false;
+                this.updateScenarioButtons('idle');
+                this.removeLoadingIndicator();
+                // 重置待处理请求计数
+                this.pendingRequests = 0;
+                
+                console.log('场景分析已停止');
+                uiController.showAlert('info', '场景分析已停止');
+            },
+            
+            // 抓取并分析当前帧
+            captureAndAnalyzeCurrentFrame(prompt) {
+                try {
+                    if (!this.isAnalyzing) return;
+                    
+                    let videoElement;
+                    if (state.localCameraActive) {
+                        videoElement = document.getElementById('streamVideo');
+                    } else if (state.ipCameraActive) {
+                        videoElement = document.getElementById('ipCameraVideo');
+                    }
+                    
+                    if (!videoElement || !videoElement.videoWidth) {
+                        setTimeout(() => this.captureAndAnalyzeCurrentFrame(prompt), 500);
+                        return;
+                    }
+                    
+                    // 创建canvas和截取视频帧
+                    const canvas = document.createElement('canvas');
+                    canvas.width = videoElement.videoWidth;
+                    canvas.height = videoElement.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+                    
+                    // 获取图像数据
+                    const imageData = canvas.toDataURL('image/jpeg', CONFIG.frameQuality);
+                    
+                    // 分析图像
+                    this.analyzeImageData(imageData, prompt);
+                    
+                    // 如果仍在分析，设置下一次抓取
+                    if (this.isAnalyzing) {
+                        setTimeout(() => this.captureAndAnalyzeCurrentFrame(prompt), 5000); // 每5秒钟分析一次
+                    }
+                } catch (error) {
+                    console.error('抓取和分析当前帧时出错:', error);
+                    if (this.isAnalyzing) {
+                        setTimeout(() => this.captureAndAnalyzeCurrentFrame(prompt), 2000);
+                    }
+                }
+            },
+            
+            // 记录待处理的请求数量
+            pendingRequests: 0,
+            
+            // 分析视频帧
+            analyzeVideoFrames(prompt, frameInterval) {
+                try {
+                    if (!this.isAnalyzing) return;
+                    
+                    if (!state.streamExtractedFrames || state.streamExtractedFrames.length === 0) {
+                        uiController.showAlert('error', '视频帧抽取未完成');
+                        this.stopScenarioAnalysis();
+                        return;
+                    }
+                    
+                    // 获取当前帧
+                    const currentFrame = state.streamExtractedFrames[this.currentFrameIndex];
+                    
+                    // 检查帧数据，确定正确的图像数据属性（dataUrl或data）
+                    const frameImageData = currentFrame.dataUrl || currentFrame.data;
+                    
+                    // 确保有有效的图像数据
+                    if (!frameImageData) {
+                        console.error('无法获取帧图像数据');
+                        uiController.showAlert('error', '无法获取视频帧');
+                        this.stopScenarioAnalysis();
+                        return;
+                    }
+                    
+                    // 获取当前帧的视频时间（秒）
+                    const videoTime = currentFrame.time || this.currentFrameIndex * CONFIG.defaultFrameInterval;
+                    
+                    // 递增待处理请求计数器
+                    this.pendingRequests++;
+                    
+                    // 分析图像，传递视频时间和标记是否为最后一帧
+                    const isLastFrame = this.currentFrameIndex >= state.streamExtractedFrames.length - 1;
+                    this.analyzeImageData(frameImageData, prompt, currentFrame.timestamp, videoTime, isLastFrame);
+                    
+                    // 更新帧索引
+                    this.currentFrameIndex++;
+                    
+                    // 检查是否已发送所有帧的分析请求
+                    if (this.currentFrameIndex >= state.streamExtractedFrames.length) {
+                        console.log('已发送所有视频帧分析请求，共 ' + state.streamExtractedFrames.length + ' 帧，等待后端处理完成...');
+                        // 注意：我们不在这里停止分析，而是等待所有请求完成
+                        return; // 不再继续发送请求
+                    }
+                    
+                    // 如果仍在分析，设置下一次分析
+                    if (this.isAnalyzing) {
+                        setTimeout(() => this.analyzeVideoFrames(prompt, frameInterval), frameInterval);
+                    }
+                } catch (error) {
+                    console.error('分析视频帧时出错:', error);
+                    this.stopScenarioAnalysis();
+                }
+            },
+            
+            // 分析图片
+            analyzeImage(prompt) {
+                try {
+                    if (!imageController.hasImage) {
+                        uiController.showAlert('error', '请先上传图片');
+                        this.stopScenarioAnalysis();
+                        return;
+                    }
+                    
+                    const imageElement = document.getElementById('imagePreview');
+                    
+                    // 创建canvas和截取图片
+                    const canvas = document.createElement('canvas');
+                    canvas.width = imageElement.naturalWidth;
+                    canvas.height = imageElement.naturalHeight;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(imageElement, 0, 0, canvas.width, canvas.height);
+                    
+                    // 获取图像数据
+                    const imageData = canvas.toDataURL('image/jpeg', CONFIG.frameQuality);
+                    
+                    // 分析图像
+                    this.analyzeImageData(imageData, prompt);
+                } catch (error) {
+                    console.error('分析图片时出错:', error);
+                    this.stopScenarioAnalysis();
+                }
+            },
+            
+            // 分析图像数据
+            analyzeImageData(imageData, prompt, timestamp = null, videoTime = null, isLastFrame = false) {
+                try {
+                    // 准备分析数据
+                    const data = {
+                        model: state.selectedModel,
+                        image: imageData,
+                        prompt: prompt
+                    };
+                    
+                    console.log(`发送场景分析请求: 场景=${this.selectedScenario}, 模型=${state.selectedModel}`);
+                    
+                    // 添加调试信息
+                    if (!imageData) {
+                        console.error('分析数据中图像数据为空');
+                        uiController.showAlert('error', '无法获取图像数据');
+                        return;
+                    }
+                    
+                    // 检查图像数据格式是否正确
+                    if (typeof imageData !== 'string' || !imageData.startsWith('data:image')) {
+                        console.error('图像数据格式无效，应为base64编码的数据URL');
+                        console.log('图像数据类型:', typeof imageData);
+                        console.log('图像数据预览:', imageData ? imageData.substring(0, 50) + '...' : '空');
+                        uiController.showAlert('error', '图像数据格式无效');
+                        return;
+                    }
+                    
+                    // 添加请求状态指示
+                    this.addScenarioResult('正在分析场景中...', timestamp, imageData, videoTime);
+                    
+                    fetch('/api/analyze-scenario', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data)
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`网络响应异常 (${response.status}: ${response.statusText})`);
+                        }
+                        return response.json();
+                    })
+                    .then(result => {
+                        console.log('场景分析结果:', result);
+                        
+                        if (this.isAnalyzing) {
+                            // 移除加载指示器
+                            this.removeLoadingIndicator();
+                            
+                            // 检查结果格式
+                            if (!result || !result.text) {
+                                throw new Error('返回的结果格式无效，缺少text字段');
+                            }
+                            
+                            // 清除所有的"正在分析"临时消息
+                            const resultsContainer = document.getElementById('scenarioResultsContainer');
+                            if (resultsContainer) {
+                                const pendingMsgs = resultsContainer.querySelectorAll('.scenario-result');
+                                pendingMsgs.forEach(msg => {
+                                    if (msg.textContent.includes('正在分析场景中')) {
+                                        msg.remove();
+                                    }
+                                });
+                            }
+                            
+                            // 显示分析结果
+                            this.addScenarioResult(result.text, timestamp, imageData, videoTime);
+                            
+                            // 如果是图片模式或单次分析，更新按钮状态
+                            if (state.currentMode === 'image' || 
+                               (!state.localCameraActive && !state.ipCameraActive && !state.hasUploadedVideo)) {
+                                this.isAnalyzing = false;
+                                this.updateScenarioButtons('idle');
+                            }
+                            
+                            // 减少待处理请求计数
+                            this.pendingRequests--;
+                            console.log(`请求完成，剩余待处理请求数: ${this.pendingRequests}`);
+                            
+                            // 检查是否所有请求都已完成，且这是最后一个分析
+                            if (this.pendingRequests <= 0 && isLastFrame) {
+                                console.log('所有视频帧分析请求已完成处理');
+                                uiController.showAlert('info', '视频分析完成');
+                                this.isAnalyzing = false;
+                                this.updateScenarioButtons('idle');
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('分析图像数据时出错:', error);
+                        if (this.isAnalyzing) {
+                            // 清除所有的"正在分析"临时消息
+                            const resultsContainer = document.getElementById('scenarioResultsContainer');
+                            if (resultsContainer) {
+                                const pendingMsgs = resultsContainer.querySelectorAll('.scenario-result');
+                                pendingMsgs.forEach(msg => {
+                                    if (msg.textContent.includes('正在分析场景中')) {
+                                        msg.remove();
+                                    }
+                                });
+                            }
+                            
+                            // 显示失败信息
+                            this.addScenarioResult(`分析失败: ${error.message}`, timestamp);
+                            
+                            // 建议用户尝试的操作
+                            this.addScenarioResult('建议: 请检查网络连接并重试，或尝试选择其他模型', null);
+                            
+                            // 恢复按钮状态
+                            this.pendingRequests--;
+                            console.log(`请求失败，剩余待处理请求数: ${this.pendingRequests}`);
+                            
+                            // 如果没有待处理请求，或者这是图片/单次分析，完全停止分析
+                            if (this.pendingRequests <= 0 || state.currentMode === 'image' || 
+                                (!state.localCameraActive && !state.ipCameraActive && !state.hasUploadedVideo)) {
+                                this.isAnalyzing = false;
+                                this.updateScenarioButtons('idle');
+                            }
+                            
+                            this.removeLoadingIndicator();
+                        }
+                    });
+                } catch (error) {
+                    console.error('发送分析请求时出错:', error);
+                    if (this.isAnalyzing) {
+                        this.addScenarioResult(`发送分析请求失败: ${error.message}`, timestamp);
+                    }
+                }
+            },
+            
+            // 存储已分析的视频时间点，用于防止重复
+            analyzedVideoTimes: new Set(),
+            
+            // 添加场景分析结果
+            addScenarioResult(text, timestamp = null, imageData = null, videoTime = null) {
+                try {
+                    const resultsContainer = document.getElementById('scenarioResultsContainer');
+                    if (!resultsContainer) return;
+                    
+                    // 防止视频时间点重复分析（除了"正在分析"的临时消息）
+                    if (videoTime !== null && state.hasUploadedVideo && !text.includes('正在分析场景中')) {
+                        // 将时间转为2位小数的字符串形式，避免浮点数比较问题
+                        const timeKey = videoTime.toFixed(2);
+                        
+                        // 如果这个时间点已经分析过，跳过
+                        if (this.analyzedVideoTimes.has(timeKey)) {
+                            console.log(`跳过重复的视频时间点: ${timeKey}秒`);
+                            return;
+                        }
+                        
+                        // 记录这个时间点已被分析
+                        this.analyzedVideoTimes.add(timeKey);
+                    }
+                    
+                    // 清除初始提示
+                    if (resultsContainer.querySelector('.text-muted')) {
+                        resultsContainer.innerHTML = '';
+                    }
+                    
+                    // 创建结果元素
+                    const resultElement = document.createElement('div');
+                    resultElement.className = 'scenario-result';
+                    
+                    // 格式化时间戳
+                    let timeText = '';
+                    if (timestamp) {
+                        const date = new Date(timestamp);
+                        const hours = date.getHours().toString().padStart(2, '0');
+                        const minutes = date.getMinutes().toString().padStart(2, '0');
+                        const seconds = date.getSeconds().toString().padStart(2, '0');
+                        timeText = `${hours}:${minutes}:${seconds}`;
+                    } else {
+                        const now = new Date();
+                        const hours = now.getHours().toString().padStart(2, '0');
+                        const minutes = now.getMinutes().toString().padStart(2, '0');
+                        const seconds = now.getSeconds().toString().padStart(2, '0');
+                        timeText = `${hours}:${minutes}:${seconds}`;
+                    }
+                    
+                    // 获取当前帧的图像数据
+                    if (!imageData) {
+                        // 尝试从各种来源获取图像数据
+                        if (state.currentMode === 'image' && imageController.hasImage) {
+                            const imageElement = document.getElementById('imagePreview');
+                            if (imageElement) {
+                                const canvas = document.createElement('canvas');
+                                canvas.width = imageElement.naturalWidth;
+                                canvas.height = imageElement.naturalHeight;
+                                const ctx = canvas.getContext('2d');
+                                ctx.drawImage(imageElement, 0, 0, canvas.width, canvas.height);
+                                imageData = canvas.toDataURL('image/jpeg', CONFIG.frameQuality);
+                            }
+                        } else if (state.localCameraActive) {
+                            imageData = streamController.captureCurrentFrame();
+                        } else if (state.ipCameraActive) {
+                            imageData = ipCameraController.captureCurrentFrame();
+                        } else if (state.hasUploadedVideo && state.streamExtractedFrames && this.currentFrameIndex < state.streamExtractedFrames.length) {
+                            imageData = state.streamExtractedFrames[this.currentFrameIndex].dataUrl || state.streamExtractedFrames[this.currentFrameIndex].data;
+                        }
+                    }
+                    
+                    // 设置内容
+                    let contentHTML = '';
+                    
+                    // 格式化视频时间显示
+                    let videoTimeHTML = '';
+                    if (videoTime !== null && videoTime !== undefined && state.hasUploadedVideo) {
+                        const minutes = Math.floor(videoTime / 60);
+                        const seconds = Math.floor(videoTime % 60);
+                        const milliseconds = Math.floor((videoTime % 1) * 100);
+                        videoTimeHTML = `<div class="scenario-video-time">视频时间: ${minutes}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}</div>`;
+                    }
+                    
+                    // 如果有图像数据，添加图像
+                    if (imageData) {
+                        contentHTML += `
+                            <div class="scenario-result-content">
+                                <div class="scenario-frame">
+                                    <img src="${imageData}" alt="场景分析图像">
+                                </div>
+                                <div class="scenario-info">
+                                    <div class="scenario-description">${text.replace(/\n/g, '<br>')}</div>
+                                    ${videoTimeHTML}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        contentHTML += `
+                            <div class="scenario-content">${text.replace(/\n/g, '<br>')}</div>
+                            ${videoTimeHTML}
+                        `;
+                    }
+                    
+                    contentHTML += `<div class="scenario-timestamp mt-2">时间: ${timeText}</div>`;
+                    
+                    resultElement.innerHTML = contentHTML;
+                    
+                    // 添加到容器的顶部
+                    resultsContainer.insertBefore(resultElement, resultsContainer.firstChild);
+                    
+                    // 滚动到顶部
+                    resultsContainer.scrollTop = 0;
+                } catch (error) {
+                    console.error('添加场景分析结果时出错:', error);
+                }
+            },
+            
+            // 清空场景分析结果
+            clearScenarioResults() {
+                try {
+                    const resultsContainer = document.getElementById('scenarioResultsContainer');
+                    if (resultsContainer) {
+                        resultsContainer.innerHTML = `
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-buildings" style="font-size: 2rem;"></i>
+                                <p class="mt-2">请选择场景并开始分析</p>
+                            </div>
+                        `;
+                    }
+                } catch (error) {
+                    console.error('清空场景分析结果时出错:', error);
+                }
+            },
+            
+            // 添加加载指示器
+            addLoadingIndicator() {
+                try {
+                    const resultsContainer = document.getElementById('scenarioResultsContainer');
+                    if (!resultsContainer) return;
+                    
+                    // 清除容器内容
+                    resultsContainer.innerHTML = `
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">加载中...</span>
+                            </div>
+                            <p class="mt-2">正在分析场景，请稍候...</p>
+                        </div>
+                    `;
+                } catch (error) {
+                    console.error('添加加载指示器时出错:', error);
+                }
+            },
+            
+            // 移除加载指示器
+            removeLoadingIndicator() {
+                try {
+                    const resultsContainer = document.getElementById('scenarioResultsContainer');
+                    if (!resultsContainer) return;
+                    
+                    const loadingIndicator = resultsContainer.querySelector('.spinner-border');
+                    if (loadingIndicator) {
+                        const parentElement = loadingIndicator.parentElement;
+                        if (parentElement && parentElement.classList.contains('text-center')) {
+                            parentElement.remove();
+                        }
+                    }
+                } catch (error) {
+                    console.error('移除加载指示器时出错:', error);
+                }
+            }
+        };
     </script>
 </body>
 </html>
