@@ -92,6 +92,18 @@
             color: #666;
         }
         
+        /* 自定义元景图标样式 */
+        .custom-yuanjing-icon {
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+            background-image: url('/static/icon/yuanjing.jpeg');
+            background-size: cover;
+            background-position: center;
+            border-radius: 50%;
+            vertical-align: text-bottom;
+        }
+        
         .main-container {
             flex: 1;
             padding: 4.5rem 0 1rem 0; /* Increased top padding to account for fixed navbar plus extra space */
@@ -1253,6 +1265,19 @@
                                     </div>
                                 </a>
                             </li>
+                            <li>
+                                <a class="dropdown-item model-dropdown-item" href="#" onclick="selectModel('llama_scout')" id="llama_scout-dropdown-item">
+                                    <div class="d-flex align-items-center">
+                                        <div class="dropdown-icon-container" style="background: transparent; padding: 0; overflow: hidden;">
+                                            <img src="/static/icon/yuanjing.jpeg" alt="元景" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+                                        </div>
+                                        <div>
+                                            <div class="dropdown-model-title">联通元景</div>
+                                            <div class="dropdown-model-description">联通元景大模型</div>
+                                        </div>
+                                    </div>
+                                </a>
+                            </li>
                         </ul>
                     </li>
                 </ul>
@@ -1312,6 +1337,15 @@
                             </div>
                             <div class="model-title">Kimi</div>
                             <div class="model-description">Moonshot AI's multimodal model with strong visual understanding capabilities.</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-sm-6">
+                        <div class="model-card" onclick="selectModel('llama_scout')" id="llama_scout-model">
+                            <div class="model-icon" style="background: transparent; padding: 0; overflow: hidden;">
+                                <img src="/static/icon/yuanjing.jpeg" alt="元景" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+                            </div>
+                            <div class="model-title">联通元景</div>
+                            <div class="model-description">联通元景大模型</div>
                         </div>
                     </div>
                 </div>
@@ -2044,10 +2078,21 @@
                                 icon = 'bi-fire';
                                 modelName = '豆包';
                                 break;
+                            case 'llama_scout':
+                                // 使用自定义图标
+                                icon = 'custom-yuanjing-icon';
+                                modelName = '联通元景';
+                                break;
                         }
                         
                         // 更新模型按钮显示
-                        modelDropdown.innerHTML = `<i class="bi ${icon}"></i> ${modelName}`;
+                        if (icon.startsWith('custom-')) {
+                            // 处理自定义图标
+                            modelDropdown.innerHTML = `<span class="${icon}"></span> ${modelName}`;
+                        } else {
+                            // 处理Bootstrap图标
+                            modelDropdown.innerHTML = `<i class="bi ${icon}"></i> ${modelName}`;
+                        }
                     }
                     
                     state.selectedModel = model;

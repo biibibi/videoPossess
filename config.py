@@ -10,6 +10,7 @@
 #   - DASHSCOPE_API_KEY
 #   - MOONSHOT_API_KEY
 #   - ARK_API_KEY
+#   - YUANJING_API_KEY
 #   ...（根据实际模型需求添加）
 
 import os
@@ -105,6 +106,15 @@ DOUBAN_CONFIG = {
     "max_tokens": 1024
 }
 
+# 元景大模型配置
+LLAMA_SCOUT_CONFIG = {
+    "api_key": os.environ.get("YUANJING_API_KEY", ""),
+    "model": "Llama-4-Scout-17B-16E-Instruct",
+    "base_url": "https://api.yuanjing.com/v1",  # 使用元景的API基础URL
+    "temperature": 0.1,
+    "max_tokens": 1024
+}
+
 # 模型配置
 MODELS = {
     "kimi": {
@@ -144,6 +154,13 @@ MODELS = {
         "base_url": DOUBAN_CONFIG["base_url"],
         "temperature": DOUBAN_CONFIG["temperature"],
         "max_tokens": DOUBAN_CONFIG["max_tokens"]
+    },
+    "llama_scout": {
+        "name": LLAMA_SCOUT_CONFIG["model"],
+        "api_key": LLAMA_SCOUT_CONFIG["api_key"],
+        "base_url": LLAMA_SCOUT_CONFIG["base_url"],
+        "temperature": LLAMA_SCOUT_CONFIG["temperature"],
+        "max_tokens": LLAMA_SCOUT_CONFIG["max_tokens"]
     }
 }
 

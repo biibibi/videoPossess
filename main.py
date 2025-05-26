@@ -811,7 +811,8 @@ system_prompts = {
     "gemini": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。",
     "qwen": "你是一个专业的视觉分析助手，请帮助用户分析图像中的内容。",
     "kimi": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。",
-    "douban": "你是一个专业的视觉分析助手，请帮助用户分析图像中的内容。请始终使用有效的JSON格式返回分析结果，确保每个目标都有明确的found属性，值为true或false。"
+    "douban": "你是一个专业的视觉分析助手，请帮助用户分析图像中的内容。请始终使用有效的JSON格式返回分析结果，确保每个目标都有明确的found属性，值为true或false。",
+    "llama_scout": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。请尽可能返回有效的JSON格式，包含description字段和targets数组，每个目标包含name和found属性。"
 }
 
 # 添加API调用超时和重试机制
@@ -1807,25 +1808,27 @@ class ModelProcessor:
         result = None
         
         try:
-            if model_name == "minimax":
+        if model_name == "minimax":
                 result = await cls.process_minimax(image_data, targets, system_message, user_message, start_time)
-            elif model_name == "qwen":
+        elif model_name == "qwen":
                 result = await cls.process_qwen(image_data, targets, system_message, user_message, start_time)
-            elif model_name == "gemini":
+        elif model_name == "gemini":
                 result = await cls.process_gemini(image_data, targets, system_message, user_message, start_time)
-            elif model_name == "kimi":
+        elif model_name == "kimi":
                 result = await cls.process_kimi(image_data, targets, system_message, user_message, start_time)
-            elif model_name == "douban":
-                # 检查volcengine豆包SDK是否可用
-                if not ARK_IMPORTED:
+        elif model_name == "douban":
+            # 检查volcengine豆包SDK是否可用
+            if not ARK_IMPORTED:
                     result = format_api_response(
-                        None, 
-                        targets, 
-                        error="火山引擎豆包SDK未安装，请执行 pip install volcengine-python-sdk", 
-                        model_name="douban"
-                    )
-                else:
+                    None, 
+                    targets, 
+                    error="火山引擎豆包SDK未安装，请执行 pip install volcengine-python-sdk", 
+                    model_name="douban"
+                )
+        else:
                     result = await cls.process_douban(image_data, targets, system_message, user_message, start_time)
+            elif model_name == "llama_scout":
+                result = await cls.process_llama_scout(image_data, targets, system_message, user_message, start_time)
             else:
                 result = await cls.process_unsupported(model_name, targets, start_time)
             
@@ -1855,6 +1858,104 @@ class ModelProcessor:
             process_time = time.time() - process_start_time
             logger.error(f"[{request_id}] 处理异常: 模型={model_name}, 耗时={process_time:.2f}秒, 错误={str(e)}")
             return format_api_response(None, targets, error=f"处理时出错: {str(e)}", model_name=model_name)
+
+    @staticmethod
+    async def process_llama_scout(image_data, targets, system_message, user_message, start_time):
+        """处理元景Llama-4-Scout模型的API调用"""
+        try:
+            # 获取元景Llama-4-Scout配置
+            llama_scout_config = MODELS["llama_scout"]
+            api_key = llama_scout_config["api_key"]
+            base_url = llama_scout_config.get("base_url", "https://api.yuanjing.com/v1")
+            
+            # 记录API调用开始
+            api_start_time = time.time()
+            logger.info(f"开始调用元景Llama-4-Scout模型API，时间: {api_start_time}")
+            
+            # 提取消息内容
+            text_content = await ModelProcessor._extract_user_message_text(user_message)
+            if not text_content:
+                text_content = await ModelProcessor._generate_default_query(targets)
+                logger.warning(f"无法从user_message提取文本内容，使用默认查询: {text_content}")
+            
+            system_content = await ModelProcessor._extract_system_message_text(system_message)
+            
+            # 初始化OpenAI客户端，使用元景的API
+            client = OpenAI(
+                api_key=api_key,
+                base_url=base_url,
+                timeout=float(llama_scout_config.get("timeout", 30.0))
+            )
+            
+            # 构建请求消息
+            messages = []
+            # 添加系统消息（如果有）
+            if system_content:
+                messages.append({"role": "system", "content": system_content})
+            
+            # 添加用户消息
+            messages.append({
+                "role": "user", 
+                "content": [
+                    {"type": "text", "text": text_content},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
+                ]
+            })
+            
+            # 使用模型配置中的模型名称，或使用默认模型
+            model_name = llama_scout_config.get("name", "Llama-4-Scout-17B-16E-Instruct")
+            
+            # 发送请求
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                max_tokens=llama_scout_config.get("max_tokens", 1024),
+                temperature=llama_scout_config.get("temperature", 0.1)
+            )
+            
+            # 计算API调用时间
+            api_call_time = time.time() - api_start_time
+            logger.info(f"元景Llama-4-Scout模型API调用完成，耗时: {api_call_time:.2f}秒")
+            
+            # 提取响应内容
+            if hasattr(response, 'choices') and response.choices and len(response.choices) > 0:
+                content = response.choices[0].message.content
+                logger.debug(f"元景Llama-4-Scout API 原始返回: {content}")
+                
+                # 尝试解析JSON返回
+                parsed_json = await ModelProcessor._parse_json_from_text(content)
+                
+                if parsed_json is not None:
+                    # 提取关键信息
+                    description = parsed_json.get("description", content)
+                    parsed_targets = parsed_json.get("targets", [])
+                    
+                    # 如果成功解析了targets
+                    if parsed_targets:
+                        return {
+                            "description": description,
+                            "targets": parsed_targets,
+                            "model": "yuanjing",
+                            "status": "success",
+                            "timestamp": time.time()  # 添加时间戳确保排序
+                        }
+                
+                # 使用通用响应解析
+                return format_api_response(content, targets, model_name="llama_scout")
+            else:
+                # 响应没有有效的choices
+                error_msg = "API响应缺少有效的choices"
+                logger.warning(f"元景Llama-4-Scout API 响应无效: {error_msg}")
+                content = f"API响应格式无效: {str(response)}"
+                
+            # 使用标准格式化返回结果
+            return format_api_response(content, targets, model_name="llama_scout")
+                
+        except Exception as api_error:
+            logger.error(f"调用元景Llama-4-Scout模型API时出错: {str(api_error)}")
+            traceback_info = traceback.format_exc()
+            logger.debug(f"调用元景Llama-4-Scout出错详细信息: {traceback_info}")
+            return format_api_response(None, targets, error=f"{str(api_error)}", model_name="llama_scout")
 
 if __name__ == "__main__":
     import uvicorn
