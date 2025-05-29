@@ -241,14 +241,6 @@ window.ipCameraController = {
     },
     
     /**
-     * 开始帧捕获（已弃用，保留兼容性）
-     */
-    startFrameCapture() {
-        // 此方法已被MJPEG流替代
-        console.info('使用MJPEG流方式，不再需要帧捕获');
-    },
-    
-    /**
      * 停止帧捕获
      */
     stopFrameCapture() {
@@ -354,10 +346,7 @@ window.ipCameraController = {
      * @param {Function} analysisCallback - 分析完成后的回调函数
      */
     startAnalysis(analysisCallback) {
-        console.log('ipCameraController.startAnalysis被调用', !!analysisCallback);
-        
         if (this.analysisActive) {
-            console.log('网络摄像头分析已在运行中');
             return;
         }
         
@@ -407,7 +396,7 @@ window.ipCameraController = {
             // 获取当前帧
             const frameImage = this.captureCurrentFrame();
             if (!frameImage) {
-                console.log("未能捕获网络摄像头帧，将在500ms后重试");
+                // 重试捕获帧
                 setTimeout(() => this.analyzeNextFrame(), 500);
                 return;
             }
@@ -511,9 +500,7 @@ setInterval(async () => {
         const isConnected = await ipCameraController.checkConnectionStatus();
         
         if (!isConnected) {
-            console.log('检测到RTSP连接已断开，尝试重新连接');
-            
-            // 如果保存了URL则尝试重连
+            // 尝试重新连接
             if (state.ipCameraUrl) {
                 ipCameraController.connectToCamera(state.ipCameraUrl);
             } else {
@@ -523,26 +510,6 @@ setInterval(async () => {
         }
     }
 }, 10000); // 每10秒检查一次
-
-// 保存并加载RTSP地址
-function saveRtspUrl(url) {
-    try {
-        localStorage.setItem('lastRtspUrl', url);
-    } catch (e) {
-        console.error('保存RTSP地址失败:', e);
-    }
-}
-
-function loadSavedRtspUrl() {
-    try {
-        const savedUrl = localStorage.getItem('lastRtspUrl');
-        if (savedUrl && elements.ipCameraInput) {
-            elements.ipCameraInput.value = savedUrl;
-        }
-    } catch (e) {
-        console.error('加载RTSP地址失败:', e);
-    }
-}
 
 // 添加旋转动画样式
 const style = document.createElement('style');

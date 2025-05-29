@@ -51,7 +51,7 @@ const ModelAPIService = {
                         if (response.status >= 500 && retryCount < maxRetries - 1) {
                             retryCount++;
                             const delay = baseDelayMs * (2 ** retryCount) * (0.5 + Math.random() * 0.5);
-                            console.log(`服务器错误，${delay}ms后重试 (${retryCount}/${maxRetries})...`);
+                            // 服务器错误重试
                             await new Promise(resolve => setTimeout(resolve, delay));
                             continue;
                         }
@@ -76,7 +76,7 @@ const ModelAPIService = {
                     if (retryCount < maxRetries - 1) {
                         retryCount++;
                         const delay = baseDelayMs * (2 ** retryCount) * (0.5 + Math.random() * 0.5);
-                        console.log(`网络错误，${delay}ms后重试 (${retryCount}/${maxRetries})...`);
+                        // 网络错误重试
                         await new Promise(resolve => setTimeout(resolve, delay));
                         continue;
                     }
@@ -118,8 +118,6 @@ const ModelAPIService = {
      * @returns {Array} - 处理后的目标数组
      */
     _processTargetsArray(targetsFromAPI, originalTargets, modelName = "未知模型") {
-        console.log(`[${modelName}] 开始处理API返回的目标数组`);
-        
         // 如果API没有返回有效的目标数组，使用原始目标创建一个默认的
         if (!targetsFromAPI || !Array.isArray(targetsFromAPI) || targetsFromAPI.length === 0) {
             console.warn(`[${modelName}] API返回的targets无效，使用默认目标`);
@@ -145,7 +143,6 @@ const ModelAPIService = {
                     try {
                         const parsedTargets = JSON.parse(jsonString);
                         if (Array.isArray(parsedTargets)) {
-                            console.log(`[${modelName}] 成功将字符串解析为目标数组`);
                             targetsFromAPI = parsedTargets;
                         }
                     } catch (parseError) {
@@ -164,11 +161,6 @@ const ModelAPIService = {
                 }));
             }
         }
-        
-        console.log(`[${modelName}] API返回的目标状态:`, targetsFromAPI.map(t => 
-            typeof t === 'object' ? 
-            `${t.name}: ${t.found}` : 
-            `无效目标: ${JSON.stringify(t)}`).join(', '));
         
         // 创建一个映射，用于查找目标名称对应的API返回的found状态
         const targetMap = new Map();
@@ -195,9 +187,6 @@ const ModelAPIService = {
             
             // 保存到映射
             targetMap.set(name.toLowerCase(), found);
-            
-            // 输出调试信息
-            console.log(`[${modelName}] 目标映射: "${name}" => found=${found}`);
         }
         
         // 确保每个原始目标都有正确的found状态
@@ -206,34 +195,26 @@ const ModelAPIService = {
             // 查找这个目标在API返回中的found状态
             const found = targetMap.has(normalizedName) ? targetMap.get(normalizedName) : false;
             
-            console.log(`[${modelName}] 处理目标: "${targetName}" => found=${found}`);
-            
             return {
                 name: targetName,
                 found: found
             };
         });
         
-        console.log(`[${modelName}] 最终处理后的目标状态:`, processedTargets.map(t => `${t.name}: ${t.found}`).join(', '));
-        
         return processedTargets;
     },
 
     async _processResponse(response, searchTargets, modelName) {
         try {
-            console.log(`[${modelName}] 开始处理API响应`);
-            
             // 处理响应格式
             let responseData;
             
             // 尝试解析JSON
             try {
                 responseData = await response.json();
-                console.log(`[${modelName}] 成功解析JSON响应:`, responseData);
                 
                 // 特殊处理：检测是否是Gemini响应
                 if (modelName === "gemini") {
-                    console.log(`[Gemini] 检测到Gemini模型响应，进行特殊处理`);
                     
                     // 检查API响应中是否存在额外的JSON字符串
                     if (responseData.description && typeof responseData.description === 'string') {

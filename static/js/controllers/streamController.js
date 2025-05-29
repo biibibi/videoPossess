@@ -116,7 +116,6 @@ const streamController = {
                CONFIG.defaultFrameInterval : 
                parseFloat(elements.streamFrameInterval.value);
                
-        console.log(`获取抽帧间隔：${frameInterval}秒 (${elements.autoStreamFrameInterval.checked ? '自动模式' : '手动设置'})`);
         return frameInterval;
     }
 };

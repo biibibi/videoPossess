@@ -18,7 +18,7 @@ from pathlib import Path
 
 # 应用基础配置
 APP_CONFIG = {
-    "debug": os.environ.get("DEBUG", "False").lower() == "true",
+    "debug": os.environ.get("DEBUG", "True").lower() == "true",
     "log_file": os.environ.get("LOG_FILE", "app.log"),
     "upload_dir": os.environ.get("UPLOAD_DIR", "uploads"),
     "frames_dir": os.environ.get("FRAMES_DIR", "frames"),

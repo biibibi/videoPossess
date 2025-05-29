@@ -164,7 +164,6 @@ const analysisController = {
                 const elapsedTime = currentTime - startTime;
                 
                 if (elapsedTime >= maxAnalysisTime) {
-                    console.log(`已达到最大分析时间 ${maxAnalysisTime/1000} 秒，自动停止分析`);
                     uiController.showAlert(`已达到最大分析时间 ${maxAnalysisTime/1000} 秒，自动停止分析`, 'info');
                     this.stopAnalysis();
                     return;
@@ -172,14 +171,12 @@ const analysisController = {
                 
                 // 检查视频流是否仍然活跃
                 if (!state.streamActive) {
-                    console.log('视频流已停止，停止分析');
                     uiController.showAlert('视频流已停止，分析已结束', 'info');
                     this.stopAnalysis();
                     return;
                 }
                 
                 if (!state.isAnalyzing) {
-                    console.log('分析已手动停止');
                     return;
                 }
                 
@@ -291,7 +288,6 @@ const analysisController = {
                 const elapsedTime = currentTime - startTime;
                 
                 if (elapsedTime >= maxAnalysisTime) {
-                    console.log(`已达到最大分析时间 ${maxAnalysisTime/1000} 秒，自动停止分析`);
                     uiController.showAlert(`已达到最大分析时间 ${maxAnalysisTime/1000} 秒，自动停止分析`, 'info');
                     this.stopAnalysis();
                     return;
@@ -299,14 +295,12 @@ const analysisController = {
                 
                 // 检查网络摄像头是否仍然连接
                 if (!state.ipCameraActive) {
-                    console.log('网络摄像头已断开连接，停止分析');
                     uiController.showAlert('网络摄像头已断开连接，分析已结束', 'info');
                     this.stopAnalysis();
                     return;
                 }
                 
                 if (!state.isAnalyzing) {
-                    console.log('分析已手动停止');
                     return;
                 }
                 
@@ -462,14 +456,6 @@ const analysisController = {
                     'X-Frame-Timestamp': time.toString(),
                     'X-Analysis-Priority': 'high'
                 };
-                
-                // 添加日志输出
-                console.log('发送分析请求:', {
-                    timestamp: time,
-                    model: state.selectedModel,
-                    targets: state.searchTargets,
-                    frameData: frameData.substring(0, 50) + '...' // 只显示前50个字符，减少日志量
-                });
                 
                 const timeoutId = setTimeout(() => {
                     controller.abort();

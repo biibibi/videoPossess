@@ -6,7 +6,7 @@
     <title>视频内容分析工具</title>
     <!-- 添加html2canvas库用于网络摄像头画面捕获 -->
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%234361ee' d='M0 5a2 2 0 0 1 2-2h7.5a2 2 0 0 1 1.983 1.738l3.11-1.382A1 1 0 0 1 16 4.269v7.462a1 1 0 0 1-1.406.913l-3.111-1.382A2 2 0 0 1 9.5 13H2a2 2 0 0 1-2-2V5z'/><path fill='%234361ee' d='M0 13V5a2 2 0 0 1 2-2h7.5a2 2 0 0 1 1.983 1.738l3.11-1.382A1 1 0 0 1 16 4.269v7.462a1 1 0 0 1-1.406.913l-3.111-1.382A2 2 0 0 1 9.5 13H2a2 2 0 0 1-2-2z'/></svg>">
+    <link rel="icon" href="/static/icon/Unicom1.png" type="image/png">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
@@ -24,6 +24,41 @@
             color: #212529;
             padding-bottom: 60px;
             margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+        
+        /* 添加Unicom1背景层 */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('/static/icon/Unicom1.png');
+            background-size: 40%;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            opacity: 0.1;
+            z-index: 1;
+            pointer-events: none;
+        }
+        
+        /* 添加白色半透明遮罩层 */
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(248, 249, 250, 0.7);
+            z-index: -1;
+            pointer-events: none;
         }
         
         .navbar {
@@ -79,6 +114,15 @@
             background-color: #f0f7ff;
             border-radius: 50%;
             margin-right: 0.75rem;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+        
+        .dropdown-icon-container img {
+            width: 40px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 50%;
         }
         
         .dropdown-model-title {
@@ -105,10 +149,10 @@
         }
         
         .main-container {
-            flex: 1;
             padding: 4.5rem 0 1rem 0; /* Increased top padding to account for fixed navbar plus extra space */
             max-width: 960px;
             margin: 0 auto;
+            flex: 1;
         }
         
         .card {
@@ -159,6 +203,14 @@
             font-size: 1.5rem;
             color: var(--primary-color);
             background-color: #f0f7ff;
+            border-radius: 50%;
+            overflow: hidden;
+        }
+        
+        .model-icon img {
+            width: 48px;
+            height: 48px;
+            object-fit: cover;
             border-radius: 50%;
         }
 
@@ -1188,7 +1240,7 @@
     <nav class="navbar navbar-expand-lg fixed-top">
         <div class="container">
             <a class="navbar-brand" href="#">
-                <i class="bi bi-camera-video"></i> 视频内容分析工具
+                <img src="/static/icon/Unicom1.png" alt="联通" style="width: 36px; height: 28px; object-fit: contain; margin-right: 10px;"> 视频内容分析工具
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -1204,7 +1256,7 @@
                                 <a class="dropdown-item model-dropdown-item" href="#" onclick="selectModel('qwen')" id="qwen-dropdown-item">
                                     <div class="d-flex align-items-center">
                                         <div class="dropdown-icon-container">
-                                            <i class="bi bi-cloud"></i>
+                                            <img src="/static/icon/qwen.jpg" alt="Qwen">
                                         </div>
                                         <div>
                                             <div class="dropdown-model-title">Qwen2.5-VL</div>
@@ -1217,7 +1269,7 @@
                                 <a class="dropdown-item model-dropdown-item" href="#" onclick="selectModel('douban')" id="douban-dropdown-item">
                                     <div class="d-flex align-items-center">
                                         <div class="dropdown-icon-container">
-                                            <i class="bi bi-fire"></i>
+                                            <img src="/static/icon/doubao.jpg" alt="豆包">
                                         </div>
                                         <div>
                                             <div class="dropdown-model-title">豆包</div>
@@ -1225,7 +1277,7 @@
                                         </div>
                                     </div>
                                 </a>
-                    </li>
+                            </li>
                             <li>
                                 <a class="dropdown-item model-dropdown-item" href="#" onclick="selectModel('gemini')" id="gemini-dropdown-item">
                                     <div class="d-flex align-items-center">
@@ -1238,12 +1290,12 @@
                                         </div>
                                     </div>
                                 </a>
-                    </li>
+                            </li>
                             <li>
                                 <a class="dropdown-item model-dropdown-item" href="#" onclick="selectModel('minimax')" id="minimax-dropdown-item">
                                     <div class="d-flex align-items-center">
                                         <div class="dropdown-icon-container">
-                                            <i class="bi bi-lightning"></i>
+                                            <img src="/static/icon/Minimax.jpg" alt="MiniMax">
                                         </div>
                                         <div>
                                             <div class="dropdown-model-title">MiniMax</div>
@@ -1256,7 +1308,7 @@
                                 <a class="dropdown-item model-dropdown-item" href="#" onclick="selectModel('kimi')" id="kimi-dropdown-item">
                                     <div class="d-flex align-items-center">
                                         <div class="dropdown-icon-container">
-                                            <i class="bi bi-robot"></i>
+                                            <img src="/static/icon/kimi.png" alt="Kimi">
                                         </div>
                                         <div>
                                             <div class="dropdown-model-title">Kimi</div>
@@ -1268,8 +1320,8 @@
                             <li>
                                 <a class="dropdown-item model-dropdown-item" href="#" onclick="selectModel('llama_scout')" id="llama_scout-dropdown-item">
                                     <div class="d-flex align-items-center">
-                                        <div class="dropdown-icon-container" style="background: transparent; padding: 0; overflow: hidden;">
-                                            <img src="/static/icon/yuanjing.jpeg" alt="元景" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+                                        <div class="dropdown-icon-container">
+                                            <img src="/static/icon/yuanjing.jpeg" alt="元景">
                                         </div>
                                         <div>
                                             <div class="dropdown-model-title">联通元景</div>
@@ -1297,7 +1349,7 @@
                     <div class="col-md-3 col-sm-6">
                         <div class="model-card" onclick="selectModel('qwen')" id="qwen-model">
                             <div class="model-icon">
-                                <i class="bi bi-cloud"></i>
+                                <img src="/static/icon/qwen.jpg" alt="Qwen">
                             </div>
                             <div class="model-title">Qwen2.5-VL</div>
                             <div class="model-description">阿里通义千问视觉模型</div>
@@ -1306,7 +1358,7 @@
                     <div class="col-md-3 col-sm-6">
                         <div class="model-card" onclick="selectModel('douban')" id="douban-model">
                             <div class="model-icon">
-                                <i class="bi bi-fire"></i>
+                                <img src="/static/icon/doubao.jpg" alt="豆包">
                             </div>
                             <div class="model-title">豆包</div>
                             <div class="model-description">火山引擎视觉分析模型</div>
@@ -1324,7 +1376,7 @@
                     <div class="col-md-3 col-sm-6">
                         <div class="model-card" onclick="selectModel('minimax')" id="minimax-model">
                             <div class="model-icon">
-                                <i class="bi bi-lightning"></i>
+                                <img src="/static/icon/Minimax.jpg" alt="MiniMax">
                             </div>
                             <div class="model-title">MiniMax</div>
                             <div class="model-description">国产视觉分析模型</div>
@@ -1333,7 +1385,7 @@
                     <div class="col-md-3 col-sm-6">
                         <div class="model-card" onclick="selectModel('kimi')" id="kimi-model">
                             <div class="model-icon">
-                                <i class="bi bi-robot"></i>
+                                <img src="/static/icon/kimi.png" alt="Kimi">
                             </div>
                             <div class="model-title">Kimi</div>
                             <div class="model-description">Moonshot AI's multimodal model with strong visual understanding capabilities.</div>
@@ -1633,6 +1685,12 @@
                                 </div>
                                 <div class="scenario-name">火灾检测</div>
                             </div>
+                            <div class="scenario-option" data-scenario="illegal-parking">
+                                <div class="scenario-icon">
+                                    <i class="bi bi-car-front"></i>
+                                </div>
+                                <div class="scenario-name">违停检测</div>
+                            </div>
                             <div class="scenario-option" data-scenario="custom">
                                 <div class="scenario-icon">
                                     <i class="bi bi-plus-circle"></i>
@@ -1699,24 +1757,11 @@
             }
         };
 
-        // 模型API配置
+        // 注意：出于安全考虑，已移除前端硬编码的API密钥
+        // API密钥现在通过后端配置文件和环境变量管理
+        // 请在config.py和环境变量中配置相应的API密钥
         const MODEL_CONFIG = {
-            minimax: {
-                api_key: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJHcm91cE5hbWUiOiJrZW5peCIsIlVzZXJOYW1lIjoia2VuaXgiLCJBY2NvdW50IjoiIiwiU3ViamVjdElEIjoiMTg3OTE3NDIwMDIzNzc2ODg4MCIsIlBob25lIjoiMTU2NTc1NzYxMDYiLCJHcm91cElEIjoiMTg3OTE3NDIwMDIyOTM4MDI3MiIsIlBhZ2VOYW1lIjoiIiwiTWFpbCI6IiIsIkNyZWF0ZVRpbWUiOiIyMDI1LTAyLTIwIDE2OjMyOjA1IiwiVG9rZW5UeXBlIjoxLCJpc3MiOiJtaW5pbWF4In0.H77D2A2PDcDydFO6XitXN_27GImSdMp7jqNF8fSN9tWKfjGE1t2lmd8NJw3Z09aizEujfnbOoR_zhuLJEes-_XbLXAHereyLtv1tLMQCxOW6gp0103fLF40R7eSB_knZzZeKWDGvTkicF9eNPWADMPkzbVpKLYbcvuM0wmyjtZCYbs0vGe6C-b0us4eiKb5ZnIUcCYZ6a6hR24LZlNKwlU55oIlLwKo8U3auuYvLoL81P06T3oY2V4QYub8nVx4EG27rGZExfLi5nYXoXvSjC6wLgERx_U6X9Ef_wkOObauv5JT89M6BRxppzfBBYG1szCfjb3Q62eb2Q9M4XRS1Ug",
-                group_id: "1879174200229380272",
-                base_url: "https://api.minimax.chat/v1"
-            },
-            gemini: {
-                api_key: "AIzaSyDWzg0EHMQZJaABwkQ7RzmxzWtosL01uVk"
-            },
-            qwen: {
-                api_key: "195647d0-b531-42ef-a467-fa036b35ad7f",
-                base_url: "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
-            },
-            kimi: {
-                api_key: "", // Will be filled from environment variable
-                base_url: "https://api.moonshot.cn/v1"
-            }
+            // API配置已移至后端处理，避免密钥泄露
         };
 
         // 状态管理
@@ -1807,7 +1852,7 @@
                     }
                     // 跟踪创建的URL以便以后清理
                     state.blobUrls.push(url);
-                    console.log(`创建Blob URL: ${url.substr(0, 30)}...`);
+
                     return url;
                 } catch (error) {
                     console.error('创建Blob URL时出错:', error);
@@ -1821,7 +1866,7 @@
                 
                 try {
                     URL.revokeObjectURL(url);
-                    console.log(`释放Blob URL: ${url.substr(0, 30)}...`);
+
                     
                     // 从跟踪数组中移除
                     if (state.blobUrls) {
@@ -1905,13 +1950,11 @@
             optimizeMemory() {
                 // 限制结果列表的长度，防止内存占用过大
                 if (state.searchResults.length > CONFIG.maxResultsCount) {
-                    console.log(`结果列表过长，清理超过 ${CONFIG.maxResultsCount} 条的结果`);
                     state.searchResults = state.searchResults.slice(0, CONFIG.maxResultsCount);
                 }
                 
-                // 如果有大量的帧，清理旧的帧数据
+                // 清理大量帧数据以释放内存
                 if (state.streamExtractedFrames && state.streamExtractedFrames.length > 100) {
-                    console.log("清理未使用的帧缓存以释放内存");
                     
                     // 找出分析过的帧索引
                     const analyzedFrameIndexes = new Set();
@@ -1938,14 +1981,9 @@
                         }
                     });
                     
-                    // 如果需要移除帧，记录日志
-                    if (framesToRemove.length > 0) {
-                        console.log(`内存优化：从 ${state.streamExtractedFrames.length} 帧减少到 ${framesToKeep.length} 帧，移除 ${framesToRemove.length} 帧`);
-                        
-                        // 更新帧数组
-                        if (framesToKeep.length > 0) {
-                            state.streamExtractedFrames = framesToKeep;
-                        }
+                    // 更新帧数组以释放内存
+                    if (framesToRemove.length > 0 && framesToKeep.length > 0) {
+                        state.streamExtractedFrames = framesToKeep;
                         
                         // 帮助浏览器释放内存
                         setTimeout(() => {
@@ -1956,7 +1994,6 @@
                 
                 // 清理可能存在的其他Blob URLs
                 if (state.blobUrls && state.blobUrls.length > 0) {
-                    console.log(`清理 ${state.blobUrls.length} 个未使用的Blob URLs`);
                     state.blobUrls.forEach(url => {
                         try {
                             URL.revokeObjectURL(url);
@@ -2054,45 +2091,38 @@
                     const modelDropdown = document.getElementById('modelDropdown');
                     if (modelDropdown) {
                         // 根据所选模型设置不同的图标
-                        let icon = 'bi-gear';
+                        let iconHtml = '<i class="bi bi-gear"></i>';
                         let modelName = '模型';
                         
                         switch(model) {
                             case 'kimi':
-                                icon = 'bi-robot';
+                                iconHtml = '<img src="/static/icon/kimi.png" alt="Kimi" style="width: 20px; height: 20px; object-fit: cover; border-radius: 50%; margin-right: 8px;">';
                                 modelName = 'Kimi';
                                 break;
                             case 'gemini':
-                                icon = 'bi-google';
+                                iconHtml = '<i class="bi bi-google" style="margin-right: 8px;"></i>';
                                 modelName = 'Gemini';
                                 break;
                             case 'minimax':
-                                icon = 'bi-lightning';
+                                iconHtml = '<img src="/static/icon/Minimax.jpg" alt="MiniMax" style="width: 20px; height: 20px; object-fit: cover; border-radius: 50%; margin-right: 8px;">';
                                 modelName = 'MiniMax';
                                 break;
                             case 'qwen':
-                                icon = 'bi-cloud';
+                                iconHtml = '<img src="/static/icon/qwen.jpg" alt="Qwen" style="width: 20px; height: 20px; object-fit: cover; border-radius: 50%; margin-right: 8px;">';
                                 modelName = 'Qwen2.5-VL';
                                 break;
                             case 'douban':
-                                icon = 'bi-fire';
+                                iconHtml = '<img src="/static/icon/doubao.jpg" alt="豆包" style="width: 20px; height: 20px; object-fit: cover; border-radius: 50%; margin-right: 8px;">';
                                 modelName = '豆包';
                                 break;
                             case 'llama_scout':
-                                // 使用自定义图标
-                                icon = 'custom-yuanjing-icon';
+                                iconHtml = '<img src="/static/icon/yuanjing.jpeg" alt="元景" style="width: 20px; height: 20px; object-fit: cover; border-radius: 50%; margin-right: 8px;">';
                                 modelName = '联通元景';
                                 break;
                         }
                         
                         // 更新模型按钮显示
-                        if (icon.startsWith('custom-')) {
-                            // 处理自定义图标
-                            modelDropdown.innerHTML = `<span class="${icon}"></span> ${modelName}`;
-                        } else {
-                            // 处理Bootstrap图标
-                            modelDropdown.innerHTML = `<i class="bi ${icon}"></i> ${modelName}`;
-                        }
+                        modelDropdown.innerHTML = `${iconHtml}${modelName}`;
                     }
                     
                     state.selectedModel = model;
@@ -2192,7 +2222,7 @@
                         // 在视频数据加载完成后计算总帧数
                         // 获取用户调整的帧间隔
                         const frameInterval = this.getFrameInterval();
-                        console.log(`使用抽帧间隔: ${frameInterval}秒`);
+
                         // 修改总帧数计算方法，使用Math.floor来确保只在整数倍的时间点提取帧
                         const totalFrames = Math.floor(video.duration / frameInterval) + 1; // +1是因为要包括0秒的第一帧
                         
@@ -2240,12 +2270,12 @@
                     const extractFrame = (time) => {
                         // 确保不超过视频总长度
                         if (time >= duration) {
-                            console.log(`画面抽取完成，共抽取${state.streamExtractedFrames.length}帧，间隔${interval}秒`);
+
                             uiController.showAlert('info', `抽取完成`);
                             // 确保在最后释放资源
                             setTimeout(() => {
                                 utils.revokeBlobURL(videoSrc);
-                                console.log('已释放视频Blob URL');
+
                             }, 500);
                             return;
                         }
@@ -3880,22 +3910,11 @@
         // 删除 displayRTSPStream 函数
         // 删除相关的变量和事件监听器
 
-        // 保留其他必要的函数
-        function analyzeImage() {
-            // ... existing code ...
-        }
-
-        function displayResult(result) {
-            // ... existing code ...
-        }
-
-        function displayStatus(message, isError = false) {
-            // ... existing code ...
-        }
-
-        function formatTimestamp(timestamp) {
-            // ... existing code ...
-        }
+        // 以下未使用的函数已删除:
+        // - analyzeImage
+        // - displayResult
+        // - displayStatus
+        // - formatTimestamp
         
         // 切换功能区域
         function switchFeatureMode(mode) {
@@ -4865,6 +4884,9 @@
                             break;
                         case 'fire':
                             prompt = '分析当前画面：1. 是否存在明火、烟雾或其他火灾迹象？2. 如有火情，描述火势大小、位置和蔓延趋势。3. 画面中是否有易燃物品处于危险位置？4. 是否有人员被困在火场中？';
+                            break;
+                        case 'illegal-parking':
+                            prompt = '分析当前画面：1. 是否存在车辆违规停放现象？包括但不限于：占用消防通道、盲道、人行道、禁停区域等。2. 如发现违停车辆，请描述车辆类型、颜色、位置和违停类型。3. 违停行为是否影响交通通行或造成安全隐患？4. 周围是否有相关的禁停标识或标线？5. 请评估违停行为的严重程度并提出处理建议。';
                             break;
                         case 'custom':
                             prompt = '请分析画面中的异常情况，包括但不限于设备故障、环境异常、安全隐患等。';

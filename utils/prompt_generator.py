@@ -22,6 +22,7 @@ class PromptGenerator:
         """
         # 检查是否为智能分析模式
         is_analysis_mode = False
+        is_scenario_analysis = False
         user_query = ""
         
         # 检查targets中是否包含智能分析模式标记
@@ -31,19 +32,18 @@ class PromptGenerator:
             user_query = targets[0]
             # 移除标记，只保留查询内容
             targets = [user_query]
+        # 检查是否为特定场景分析模式
+        elif len(targets) >= 2 and "mode=scenario_analysis" in targets:
+            is_scenario_analysis = True
+            # 获取场景提示词（在第二个位置）
+            user_query = targets[1]
         
-        if is_analysis_mode:
-            # 智能分析模式的提示词
-            base_prompt = f"请分析图像并回答用户的问题: {user_query}"
-            
-            # 不同模型的提示词模板
-            prompt_templates = {
-                "minimax": base_prompt + "。请详细分析图像内容，提供有用的信息来回答用户问题。保持回答简洁明了。",
-                "gemini": base_prompt + "。请详细分析图像并提供信息丰富的回答。",
-                "qwen": base_prompt + "。请详细分析图像内容并提供专业的回答。",
-                "llama": base_prompt + "。请分析图像并给出详细回答。",
-                "douban": base_prompt + "。请详细分析图像内容并提供专业的回答。"
-            }
+        if is_scenario_analysis:
+            # 特定场景分析模式：直接返回纯净的场景提示词内容
+            return user_query
+        elif is_analysis_mode:
+            # 智能分析模式的提示词：简化版本，直接返回用户问题并添加简短描述要求
+            return f"{user_query}。请回答问题并对图像进行简短描述。"
         else:
             # 原有的目标搜索模式
             base_prompt = f"分析图片是否包含: {', '.join(targets)}。"
@@ -85,9 +85,9 @@ class PromptGenerator:
             # 目标搜索模式的系统提示词
             system_prompts = {
                 "minimax": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。你应该使用规范的JSON格式返回分析结果，包含targets数组和description字段。",
-                "gemini": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。",
+                "gemini": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。你的回答必须是规范的JSON格式，包含targets数组和description字段。不要包含任何其他内容或解释。",
                 "qwen": "你是一个专业的视觉分析助手，请帮助用户分析图像中的内容。你的回答必须是规范的JSON格式，包含targets数组和description字段。不要包含任何其他内容或解释。",
-                "llama": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。",
+                "llama": "你是一个专业的图像分析助手，请帮助用户分析图像中的内容。你的回答必须是规范的JSON格式，包含targets数组和description字段。不要包含任何其他内容或解释。",
                 "douban": "你是一个专业的视觉分析助手，请帮助用户分析图像中的内容。你的回答必须是规范的JSON格式，包含targets数组和description字段。"
             }
         
@@ -108,6 +108,7 @@ class PromptGenerator:
         """
         # 检查是否为智能分析模式
         is_analysis_mode = False
+        is_scenario_analysis = False
         user_query = ""
         
         # 检查targets中是否包含智能分析模式标记
@@ -117,10 +118,20 @@ class PromptGenerator:
             user_query = targets[0]
             # 移除标记，保留用户查询作为targets
             targets = [user_query]
+        # 检查是否为特定场景分析模式
+        elif len(targets) >= 2 and "mode=scenario_analysis" in targets:
+            is_scenario_analysis = True
+            # 获取场景提示词（在第二个位置）
+            user_query = targets[1]
         
         # 获取系统提示词和用户提示词
-        system_prompt = PromptGenerator.generate_system_prompt(model_name, is_analysis_mode)
-        user_prompt = PromptGenerator.generate_prompt(targets, model_name)
+        if is_scenario_analysis:
+            # 特定场景分析模式：使用简单的系统提示词，用户提示词直接使用场景内容
+            system_prompt = PromptGenerator.generate_system_prompt(model_name, False)
+            user_prompt = user_query  # 直接使用纯净的场景提示词
+        else:
+            system_prompt = PromptGenerator.generate_system_prompt(model_name, is_analysis_mode)
+            user_prompt = PromptGenerator.generate_prompt(targets, model_name)
         
         # 构建系统消息
         system_message = {

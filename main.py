@@ -2,7 +2,7 @@
 # main.py
 from dotenv import load_dotenv
 load_dotenv()
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, Response
@@ -15,20 +15,18 @@ from contextlib import asynccontextmanager
 from tenacity import retry, stop_after_attempt, wait_exponential
 import logging
 import os
+import sys
 from config import APP_CONFIG, MODELS, DEFAULT_MODEL, GEMINI_CONFIG
 import functools
 import base64
 from openai import OpenAI
 from utils.prompt_generator import PromptGenerator
-import aiohttp
-import datetime
 import traceback
 import re
 import cv2
 import numpy as np
 from fastapi.responses import StreamingResponse
-from typing import List, Dict, Any, Callable, TypeVar, Awaitable, Optional, Union
-import inspect
+from typing import List, Dict, Any, Callable, Awaitable, Optional, Union
 
 # 导入特定模型的依赖
 try:
@@ -39,9 +37,6 @@ except ImportError:
     ARK_IMPORTED = False
     logging.warning("volcenginesdkarkruntime未安装，豆包模型将无法使用，请执行 pip install volcengine-python-sdk")
 
-# 函数返回类型定义
-T = TypeVar('T')
-
 # 错误处理装饰器
 def api_error_handler(status_code: int = 500):
     """
@@ -50,9 +45,9 @@ def api_error_handler(status_code: int = 500):
     Args:
         status_code: 发生错误时返回的HTTP状态码
     """
-    def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
+    def decorator(func: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
         @functools.wraps(func)
-        async def wrapper(*args, **kwargs) -> T:
+        async def wrapper(*args, **kwargs) -> Any:
             try:
                 return await func(*args, **kwargs)
             except Exception as e:
@@ -125,22 +120,54 @@ import os
 from pathlib import Path
 
 # 确保日志目录存在
-log_file_path = APP_CONFIG.get("log_file", "logs/app.log")
+log_file_path = APP_CONFIG.get("log_file", "app.log")
 log_dir = os.path.dirname(log_file_path)
 if log_dir and not os.path.exists(log_dir):
     os.makedirs(log_dir, exist_ok=True)
 
-logging.basicConfig(
-    level=logging.DEBUG if APP_CONFIG.get("debug", False) else logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(log_file_path)
-    ]
-)
+# 配置根日志记录器
+def setup_logging():
+    """配置应用日志"""
+    # 移除可能存在的处理器
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+    
+    # 设置日志格式
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    # 控制台处理器
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    
+    # 文件处理器
+    file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
+    file_handler.setFormatter(formatter)
+    
+    # 根日志配置
+    log_level = logging.DEBUG if APP_CONFIG.get("debug", False) else logging.INFO
+    logging.root.setLevel(log_level)
+    logging.root.addHandler(console_handler)
+    logging.root.addHandler(file_handler)
+    
+    # 设置uvicorn相关日志级别
+    logging.getLogger("uvicorn").setLevel(log_level)
+    logging.getLogger("uvicorn.error").setLevel(log_level)
+    logging.getLogger("uvicorn.access").setLevel(log_level)
+    
+    return logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
+# 初始化日志
+logger = setup_logging()
+
+# 测试日志输出
+logger.info("=" * 50)
+logger.info("视频分析应用日志系统初始化完成")
+logger.info(f"日志级别: {'DEBUG' if APP_CONFIG.get('debug', False) else 'INFO'}")
+logger.info(f"日志文件: {log_file_path}")
+logger.info("=" * 50)
 
 # 从配置文件获取设置
 # 应用配置
@@ -282,15 +309,6 @@ async def get_rtsp_frame(source: str = "current"):
         )
 
 # 保留原有截图API，但改为调用通用函数
-@app.get("/api/rtsp/screenshot/base64")
-async def get_rtsp_screenshot_base64():
-    """
-    获取RTSP视频流的最新截图(Base64编码)
-    
-    返回Base64编码的图像数据，适用于分析API
-    """
-    return await get_rtsp_frame(source="screenshot")
-
 # 添加RTSP截图路由
 @app.get("/api/rtsp/screenshot")
 @api_error_handler(status_code=500)
@@ -619,56 +637,22 @@ async def home(request: Request):
 @api_error_handler(status_code=503)
 async def health_check():
     """
-    健康检查端点
-    
-    检查服务健康状态
+    健康检查端点，可用于监控系统状态
     """
-    # 检查Kimi API密钥是否配置
-    kimi_api_key = os.environ.get("MOONSHOT_API_KEY", "")
-    if not kimi_api_key and "kimi" in MODELS:
-        kimi_api_key = MODELS.get("kimi", {}).get("api_key", "")
-        
-    kimi_status = "已配置" if kimi_api_key else "未配置"
-    
-    return create_api_response(
-        status="success",
-        message="服务运行正常",
-        models_status={
-            "minimax": "可用",
-            "qwen": "可用",
-            "gemini": "可用",
-            "kimi": kimi_status
-        }
-    )
-
-@app.get("/test-kimi")
-async def test_kimi():
-    """
-    测试Kimi模型的基本功能
-    """
-    # 检查API密钥是否配置
-    api_key = os.environ.get("MOONSHOT_API_KEY", "")
-    if not api_key and "kimi" in MODELS:
-        api_key = MODELS.get("kimi", {}).get("api_key", "")
-    
-    if not api_key:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "status": "error",
-                "message": "未设置Moonshot API密钥，请在环境变量或配置文件中设置MOONSHOT_API_KEY",
-                "timestamp": time.time()
-            }
-        )
+    # 检查基本功能
+    health_status = {
+        "status": "healthy",
+        "timestamp": time.time(),
+        "components": {
+            "api": "ok",
+            "storage": "ok"
+        },
+        "version": "1.0"
+    }
     
     return JSONResponse(
         status_code=200,
-        content={
-            "status": "success",
-            "message": "Kimi配置有效，API密钥已设置",
-            "model": "moonshot-v1-8k-vision-preview",
-            "timestamp": time.time()
-        }
+        content=health_status
     )
 
 # 图像分析API端点
@@ -694,6 +678,10 @@ async def analyze_image(request: Request):
     model_name = data.get("model", "")
     image = data.get("image", "")
     targets = data.get("targets", [])
+    
+    # 记录从前端接收到的分析目标
+    logger.info(f"[前端请求] 接收到的分析目标: {targets}")
+    logger.info(f"[前端请求] 使用模型: {model_name}, 目标数量: {len(targets)}")
     
     # 验证请求数据
     if not model_name or not image or not targets:
@@ -740,6 +728,10 @@ async def analyze_scenario(request: Request):
     image = data.get("image", "")
     prompt = data.get("prompt", "")
     
+    # 记录从前端接收到的prompt内容
+    logger.info(f"[前端请求] 特定场景分析接收到的prompt: '{prompt[:200]}{'...' if len(prompt) > 200 else ''}'")
+    logger.info(f"[前端请求] 使用模型: {model_name}, prompt长度: {len(prompt)}")
+    
     # 验证请求数据
     if not model_name or not image or not prompt:
         logger.warning(f"请求参数不完整: model={model_name}, image={'有' if image else '无'}, prompt={'有' if prompt else '无'}")
@@ -749,8 +741,11 @@ async def analyze_scenario(request: Request):
             status_code=400
         )
     
-    # 创建分析目标，将prompt作为目标提示
-    targets = ["mode=intelligent_analysis", prompt]
+    # 创建分析目标，使用特定场景分析模式
+    targets = ["mode=scenario_analysis", prompt]
+    
+    # 记录生成的分析目标
+    logger.info(f"[后端处理] 为特定场景分析生成的targets: {targets[:1] + [targets[1][:100] + '...' if len(targets[1]) > 100 else targets[1:]]}")
     
     # 使用统一的模型处理器处理请求
     result = await ModelProcessor.process(model_name, image, targets, start_time)
@@ -1212,6 +1207,12 @@ class ModelProcessor:
             # 提取响应内容
             if hasattr(response, 'choices') and response.choices and len(response.choices) > 0:
                 content = response.choices[0].message.content
+                request_id = getattr(asyncio.current_task(), 'request_id', 'unknown')
+                logger.info(f"[{request_id}] =======================================")
+                logger.info(f"[{request_id}] AI模型响应 - Minimax")
+                logger.info(f"[{request_id}] 响应时长: {api_call_time:.2f}秒")
+                logger.info(f"[{request_id}] 响应内容: {content[:500]}{'...' if len(content) > 500 else ''}")
+                logger.info(f"[{request_id}] =======================================")
                 logger.debug(f"Minimax API 原始返回: {content}")
                 
                 # 尝试解析JSON返回
@@ -1325,6 +1326,13 @@ class ModelProcessor:
             content = ""
             raw_text = ""
             
+            # 记录响应日志
+            request_id = getattr(asyncio.current_task(), 'request_id', 'unknown')
+            logger.info(f"[{request_id}] =======================================")
+            logger.info(f"[{request_id}] AI模型响应 - Qwen")
+            logger.info(f"[{request_id}] 响应时长: {api_call_time:.2f}秒")
+            logger.info(f"[{request_id}] 原始响应数据: {str(result_data)[:300]}{'...' if len(str(result_data)) > 300 else ''}")
+            
             try:
                 # 处理嵌套结构
                 choices = result_data.get("output", {}).get("choices", [])
@@ -1336,6 +1344,10 @@ class ModelProcessor:
                 
                 # 使用raw_text，或者原始结果字符串
                 content = raw_text or str(result_data)
+                
+                # 记录解析后的内容
+                logger.info(f"[{request_id}] 解析后内容: {content[:500]}{'...' if len(content) > 500 else ''}")
+                logger.info(f"[{request_id}] =======================================")
                 
                 # 尝试解析JSON内容
                 parsed_json = await ModelProcessor._parse_json_from_text(content)
@@ -1484,6 +1496,14 @@ class ModelProcessor:
             api_call_time = time.time() - api_start_time
             logger.info(f"模型Gemini API调用完成，耗时: {api_call_time:.2f}秒")
             
+            # 记录响应日志
+            request_id = getattr(asyncio.current_task(), 'request_id', 'unknown')
+            logger.info(f"[{request_id}] =======================================")
+            logger.info(f"[{request_id}] AI模型响应 - Gemini")
+            logger.info(f"[{request_id}] 响应时长: {api_call_time:.2f}秒")
+            logger.info(f"[{request_id}] 响应内容: {content[:500]}{'...' if len(content) > 500 else ''}")
+            logger.info(f"[{request_id}] =======================================")
+            
             # 记录原始响应
             logger.debug(f"Gemini API 原始返回: {content}")
             
@@ -1589,6 +1609,15 @@ class ModelProcessor:
             # 提取响应内容
             if hasattr(response, 'choices') and response.choices and len(response.choices) > 0:
                 content = response.choices[0].message.content
+                
+                # 记录响应日志
+                request_id = getattr(asyncio.current_task(), 'request_id', 'unknown')
+                logger.info(f"[{request_id}] =======================================")
+                logger.info(f"[{request_id}] AI模型响应 - Kimi")
+                logger.info(f"[{request_id}] 响应时长: {api_call_time:.2f}秒")
+                logger.info(f"[{request_id}] 响应内容: {content[:500]}{'...' if len(content) > 500 else ''}")
+                logger.info(f"[{request_id}] =======================================")
+                
                 logger.debug(f"Kimi API 原始返回: {content}")
                 
                 # 尝试解析JSON返回
@@ -1684,17 +1713,34 @@ class ModelProcessor:
             model_name = MODELS.get("douban", {}).get("name", "doubao-1-5-vision-pro-32k-250115")
             logger.info(f"使用豆包模型: {model_name}")
             
+            # 记录API调用开始
+            api_start_time = time.time()
+            logger.info(f"开始调用豆包模型API，时间: {api_start_time}")
+            
             # 发送请求
             response = client.chat.completions.create(
                 model=model_name,
                 messages=messages
             )
             
+            # 计算API调用时间
+            api_call_time = time.time() - api_start_time
+            logger.info(f"豆包模型API调用完成，耗时: {api_call_time:.2f}秒")
+            
             # 解析响应
             result = {}
             if hasattr(response, 'choices') and len(response.choices) > 0 and hasattr(response.choices[0], 'message'):
                 content = response.choices[0].message.content
-                logger.info(f"豆包API原始响应: {content}")
+                
+                # 记录响应日志
+                request_id = getattr(asyncio.current_task(), 'request_id', 'unknown')
+                logger.info(f"[{request_id}] =======================================")
+                logger.info(f"[{request_id}] AI模型响应 - 豆包")
+                logger.info(f"[{request_id}] 响应时长: {api_call_time:.2f}秒")
+                logger.info(f"[{request_id}] 响应内容: {content[:500]}{'...' if len(content) > 500 else ''}")
+                logger.info(f"[{request_id}] =======================================")
+                
+                logger.debug(f"豆包API原始响应: {content}")
                 
                 # 尝试解析JSON返回 - 与Qwen类似
                 parsed_json = await ModelProcessor._parse_json_from_text(content)
@@ -1767,12 +1813,18 @@ class ModelProcessor:
         
         logger.info(f"[{request_id}] 开始处理{mode_str}请求: 模型={model_name}, 目标数={len(targets)}")
         if is_intelligent_mode and len(targets) > 1:
-            logger.info(f"[{request_id}] 分析提示: {targets[1][:100]}...")
+            logger.info(f"[{request_id}] 分析提示: {targets[1][:200]}{'...' if len(targets[1]) > 200 else ''}")
+            if len(targets) > 2:
+                logger.info(f"[{request_id}] 附加目标/参数: {targets[2:5]}{'...' if len(targets) > 5 else ''}")
+        else:
+            # 记录普通目标搜索模式的目标
+            targets_preview = ", ".join([t[:30] + ('...' if len(t) > 30 else '') for t in targets[:5]])
+            logger.info(f"[{request_id}] 搜索目标: {targets_preview}{'...' if len(targets) > 5 else ''}")
         
         # 参数验证
         if not model_name:
             logger.warning(f"[{request_id}] 没有提供模型名称，使用默认模型")
-            model_name = "minimax"  # 默认使用minimax模型
+            model_name = "Qwen"  # 默认使用minimax模型
         
         if not image:
             logger.error(f"[{request_id}] 没有提供图像数据")
@@ -1793,6 +1845,28 @@ class ModelProcessor:
         # 使用PromptGenerator生成提示词
         try:
             system_message, user_message = PromptGenerator.generate_messages(targets, model_name)
+            
+            # 记录生成的提示词内容（增强版日志）
+            system_content = system_message.get("content", "") if isinstance(system_message, dict) else str(system_message)
+            logger.info(f"[{request_id}] ========== 发送给大模型的Prompt ==========")
+            logger.info(f"[{request_id}] 系统提示词: {system_content[:200]}{'...' if len(system_content) > 200 else ''}")
+            
+            # 提取并记录用户消息内容（增强版）
+            if isinstance(user_message, dict) and "content" in user_message:
+                user_content = user_message["content"]
+                if isinstance(user_content, list):
+                    logger.info(f"[{request_id}] 用户消息包含 {len(user_content)} 个部分:")
+                    for idx, item in enumerate(user_content):
+                        if isinstance(item, dict):
+                            if "text" in item:
+                                logger.info(f"[{request_id}]   第{idx+1}部分[文本]: {item['text'][:200]}{'...' if len(item['text']) > 200 else ''}")
+                            elif "image_url" in item:
+                                logger.info(f"[{request_id}]   第{idx+1}部分[图像]: [base64图像数据]")
+                elif isinstance(user_content, str):
+                    logger.info(f"[{request_id}] 用户提示词: {user_content[:200]}{'...' if len(user_content) > 200 else ''}")
+            
+            logger.info(f"[{request_id}] =======================================")
+            
         except Exception as e:
             logger.error(f"[{request_id}] 生成提示词失败: {str(e)}")
             # 创建默认消息
@@ -1808,24 +1882,24 @@ class ModelProcessor:
         result = None
         
         try:
-        if model_name == "minimax":
+            if model_name == "minimax":
                 result = await cls.process_minimax(image_data, targets, system_message, user_message, start_time)
-        elif model_name == "qwen":
+            elif model_name == "qwen":
                 result = await cls.process_qwen(image_data, targets, system_message, user_message, start_time)
-        elif model_name == "gemini":
+            elif model_name == "gemini":
                 result = await cls.process_gemini(image_data, targets, system_message, user_message, start_time)
-        elif model_name == "kimi":
+            elif model_name == "kimi":
                 result = await cls.process_kimi(image_data, targets, system_message, user_message, start_time)
-        elif model_name == "douban":
-            # 检查volcengine豆包SDK是否可用
-            if not ARK_IMPORTED:
+            elif model_name == "douban":
+                # 检查volcengine豆包SDK是否可用
+                if not ARK_IMPORTED:
                     result = format_api_response(
-                    None, 
-                    targets, 
-                    error="火山引擎豆包SDK未安装，请执行 pip install volcengine-python-sdk", 
-                    model_name="douban"
-                )
-        else:
+                        None, 
+                        targets, 
+                        error="火山引擎豆包SDK未安装，请执行 pip install volcengine-python-sdk", 
+                        model_name="douban"
+                    )
+                else:
                     result = await cls.process_douban(image_data, targets, system_message, user_message, start_time)
             elif model_name == "llama_scout":
                 result = await cls.process_llama_scout(image_data, targets, system_message, user_message, start_time)
@@ -1868,9 +1942,20 @@ class ModelProcessor:
             api_key = llama_scout_config["api_key"]
             base_url = llama_scout_config.get("base_url", "https://api.yuanjing.com/v1")
             
+            # 验证API密钥
+            if not api_key or len(api_key.strip()) < 8:  # 基本验证，确保密钥不为空且有一定长度
+                error_msg = "元景API密钥无效或未正确设置"
+                logger.error(f"{error_msg}. 收到的密钥: '{api_key[:3]}...'")
+                return format_api_response(
+                    None, 
+                    targets, 
+                    error=f"{error_msg}，请在配置中检查 MODELS['llama_scout']['api_key'] 设置", 
+                    model_name="llama_scout"
+                )
+            
             # 记录API调用开始
             api_start_time = time.time()
-            logger.info(f"开始调用元景Llama-4-Scout模型API，时间: {api_start_time}")
+            logger.info(f"开始调用元景Llama-4-Scout模型API，时间: {api_start_time}, 基础URL: {base_url}")
             
             # 提取消息内容
             text_content = await ModelProcessor._extract_user_message_text(user_message)
@@ -1880,82 +1965,203 @@ class ModelProcessor:
             
             system_content = await ModelProcessor._extract_system_message_text(system_message)
             
+            # 获取超时设置，默认更长以应对网络延迟
+            timeout_setting = float(llama_scout_config.get("timeout", 60.0))
+            logger.info(f"元景API超时设置: {timeout_setting}秒")
+            
             # 初始化OpenAI客户端，使用元景的API
-            client = OpenAI(
-                api_key=api_key,
-                base_url=base_url,
-                timeout=float(llama_scout_config.get("timeout", 30.0))
-            )
-            
-            # 构建请求消息
-            messages = []
-            # 添加系统消息（如果有）
-            if system_content:
-                messages.append({"role": "system", "content": system_content})
-            
-            # 添加用户消息
-            messages.append({
-                "role": "user", 
-                "content": [
-                    {"type": "text", "text": text_content},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
-                ]
-            })
-            
-            # 使用模型配置中的模型名称，或使用默认模型
-            model_name = llama_scout_config.get("name", "Llama-4-Scout-17B-16E-Instruct")
-            
-            # 发送请求
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                max_tokens=llama_scout_config.get("max_tokens", 1024),
-                temperature=llama_scout_config.get("temperature", 0.1)
-            )
-            
-            # 计算API调用时间
-            api_call_time = time.time() - api_start_time
-            logger.info(f"元景Llama-4-Scout模型API调用完成，耗时: {api_call_time:.2f}秒")
-            
-            # 提取响应内容
-            if hasattr(response, 'choices') and response.choices and len(response.choices) > 0:
-                content = response.choices[0].message.content
-                logger.debug(f"元景Llama-4-Scout API 原始返回: {content}")
+            try:
+                client = OpenAI(
+                    api_key=api_key,
+                    base_url=base_url,
+                    timeout=timeout_setting
+                )
                 
-                # 尝试解析JSON返回
-                parsed_json = await ModelProcessor._parse_json_from_text(content)
+                # 构建请求消息
+                messages = []
+                # 添加系统消息（如果有）
+                if system_content:
+                    messages.append({"role": "system", "content": system_content})
                 
-                if parsed_json is not None:
-                    # 提取关键信息
-                    description = parsed_json.get("description", content)
-                    parsed_targets = parsed_json.get("targets", [])
+                # 添加用户消息
+                messages.append({
+                    "role": "user", 
+                    "content": [
+                        {"type": "text", "text": text_content},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
+                    ]
+                })
+                
+                # 使用模型配置中的模型名称，或使用默认模型
+                model_name = llama_scout_config.get("name", "Llama-4-Scout-17B-16E-Instruct")
+                
+                # 使用重试机制
+                max_retries = 3
+                retry_count = 0
+                last_error = None
+                
+                while retry_count < max_retries:
+                    try:
+                        logger.info(f"尝试调用元景API (尝试 {retry_count+1}/{max_retries})")
+                        
+                        # 发送请求
+                        response = client.chat.completions.create(
+                            model=model_name,
+                            messages=messages,
+                            max_tokens=llama_scout_config.get("max_tokens", 1024),
+                            temperature=llama_scout_config.get("temperature", 0.1)
+                        )
+                        
+                        # 如果到达这里，说明请求成功
+                        break
+                    except Exception as retry_error:
+                        last_error = retry_error
+                        retry_count += 1
+                        
+                        # 检查是否是认证错误
+                        if hasattr(retry_error, 'status_code') and retry_error.status_code == 403:
+                            # 这是认证错误，不需要重试
+                            logger.error(f"元景API认证失败: {str(retry_error)}")
+                            error_detail = getattr(retry_error, 'body', {})
+                            if isinstance(error_detail, dict) and 'msg' in error_detail:
+                                error_msg = error_detail['msg']
+                            else:
+                                error_msg = str(retry_error)
+                            
+                            return format_api_response(
+                                None, 
+                                targets, 
+                                error=f"元景API认证错误: {error_msg}，请检查API密钥是否正确", 
+                                model_name="llama_scout"
+                            )
+                        
+                        # 记录错误
+                        error_type = type(retry_error).__name__
+                        logger.warning(f"元景API调用失败 (尝试 {retry_count}/{max_retries}): {error_type}: {str(retry_error)}")
+                        
+                        if retry_count < max_retries:
+                            # 使用指数退避
+                            wait_time = 2 ** retry_count
+                            logger.info(f"等待 {wait_time} 秒后重试...")
+                            await asyncio.sleep(wait_time)
+                        else:
+                            # 所有重试都失败
+                            logger.error(f"元景API调用失败，已达到最大重试次数: {str(retry_error)}")
+                            raise  # 重新抛出最后一个错误
+                
+                # 计算API调用时间
+                api_call_time = time.time() - api_start_time
+                logger.info(f"元景Llama-4-Scout模型API调用完成，耗时: {api_call_time:.2f}秒")
+                
+                # 提取响应内容
+                if hasattr(response, 'choices') and response.choices and len(response.choices) > 0:
+                    content = response.choices[0].message.content
                     
-                    # 如果成功解析了targets
-                    if parsed_targets:
-                        return {
-                            "description": description,
-                            "targets": parsed_targets,
-                            "model": "yuanjing",
-                            "status": "success",
-                            "timestamp": time.time()  # 添加时间戳确保排序
-                        }
-                
-                # 使用通用响应解析
+                    # 记录响应日志
+                    request_id = getattr(asyncio.current_task(), 'request_id', 'unknown')
+                    logger.info(f"[{request_id}] =======================================")
+                    logger.info(f"[{request_id}] AI模型响应 - 元景Llama-4-Scout")
+                    logger.info(f"[{request_id}] 响应时长: {api_call_time:.2f}秒")
+                    logger.info(f"[{request_id}] 响应内容: {content[:500]}{'...' if len(content) > 500 else ''}")
+                    logger.info(f"[{request_id}] =======================================")
+                    
+                    logger.debug(f"元景Llama-4-Scout API 原始返回: {content}")
+                    
+                    # 尝试解析JSON返回
+                    parsed_json = await ModelProcessor._parse_json_from_text(content)
+                    
+                    if parsed_json is not None:
+                        # 提取关键信息
+                        description = parsed_json.get("description", content)
+                        parsed_targets = parsed_json.get("targets", [])
+                        
+                        # 如果成功解析了targets
+                        if parsed_targets:
+                            return {
+                                "description": description,
+                                "targets": parsed_targets,
+                                "model": "yuanjing",
+                                "status": "success",
+                                "timestamp": time.time()  # 添加时间戳确保排序
+                            }
+                    
+                    # 使用通用响应解析
+                    return format_api_response(content, targets, model_name="llama_scout")
+                else:
+                    # 响应没有有效的choices
+                    error_msg = "API响应缺少有效的choices"
+                    logger.warning(f"元景Llama-4-Scout API 响应无效: {error_msg}")
+                    content = f"API响应格式无效: {str(response)}"
+                    
+                # 使用标准格式化返回结果
                 return format_api_response(content, targets, model_name="llama_scout")
-            else:
-                # 响应没有有效的choices
-                error_msg = "API响应缺少有效的choices"
-                logger.warning(f"元景Llama-4-Scout API 响应无效: {error_msg}")
-                content = f"API响应格式无效: {str(response)}"
+                    
+            except Exception as permission_error:
+                # 动态导入openai并判断异常类型
+                try:
+                    import openai
+                    if isinstance(permission_error, openai.PermissionDeniedError):
+                        logger.error(f"元景API认证失败: {str(permission_error)}")
+                        error_detail = getattr(permission_error, 'response', {})
+                        if hasattr(error_detail, 'json') and callable(error_detail.json):
+                            try:
+                                error_json = error_detail.json()
+                                if isinstance(error_json, dict) and 'msg' in error_json:
+                                    error_msg = error_json['msg']
+                                else:
+                                    error_msg = str(error_json)
+                            except:
+                                error_msg = str(permission_error)
+                        else:
+                            error_msg = str(permission_error)
+                        
+                        return format_api_response(
+                            None, 
+                            targets, 
+                            error=f"元景API认证错误: {error_msg}，请检查API密钥是否正确", 
+                            model_name="llama_scout"
+                        )
+                    else:
+                        raise permission_error
+                except ImportError:
+                    # openai未安装或无法导入，回退到普通异常处理
+                    logger.error(f"openai模块未安装，无法判断PermissionDeniedError: {str(permission_error)}")
+                    return format_api_response(
+                        None, 
+                        targets, 
+                        error=f"openai模块未安装，无法判断PermissionDeniedError: {str(permission_error)}", 
+                        model_name="llama_scout"
+                    )
+                except Exception:
+                    # 不是openai.PermissionDeniedError，重新抛出
+                    raise
                 
-            # 使用标准格式化返回结果
-            return format_api_response(content, targets, model_name="llama_scout")
+            except httpx.ConnectError as connect_error:
+                # 特别处理连接错误
+                logger.error(f"连接到元景API时出错: {str(connect_error)}")
+                logger.error(f"请检查网络连接、防火墙设置和API基础URL: {base_url}")
+                return format_api_response(None, targets, error=f"连接元景API失败: {str(connect_error)}，请检查网络连接和API地址", model_name="llama_scout")
                 
-        except Exception as api_error:
-            logger.error(f"调用元景Llama-4-Scout模型API时出错: {str(api_error)}")
+            except httpx.TimeoutException as timeout_error:
+                # 特别处理超时错误
+                logger.error(f"调用元景API超时: {str(timeout_error)}")
+                return format_api_response(None, targets, error=f"调用元景API超时，请增加超时设置或检查网络连接: {str(timeout_error)}", model_name="llama_scout")
+                
+            except Exception as api_error:
+                # 通用API错误处理
+                error_type = type(api_error).__name__
+                logger.error(f"调用元景API时出错: {error_type}: {str(api_error)}")
+                traceback_info = traceback.format_exc()
+                logger.debug(f"调用元景API出错详细信息: {traceback_info}")
+                return format_api_response(None, targets, error=f"调用元景API出错: {error_type}: {str(api_error)}", model_name="llama_scout")
+                
+        except Exception as e:
+            # 最外层错误处理
+            error_type = type(e).__name__
+            logger.error(f"处理元景Llama-4-Scout请求时出错: {error_type}: {str(e)}")
             traceback_info = traceback.format_exc()
             logger.debug(f"调用元景Llama-4-Scout出错详细信息: {traceback_info}")
-            return format_api_response(None, targets, error=f"{str(api_error)}", model_name="llama_scout")
+            return format_api_response(None, targets, error=f"{error_type}: {str(e)}", model_name="llama_scout")
 
 if __name__ == "__main__":
     import uvicorn
@@ -1980,9 +2186,13 @@ if __name__ == "__main__":
     
     # 启动应用
     print("正在启动应用...")
+    logger.info("应用启动中...")
+    
     uvicorn.run(
         app, 
         host="0.0.0.0", 
         port=8000,
-        log_level="info" if not APP_CONFIG.get("debug", False) else "debug"
+        # 移除log_level参数，使用我们自定义的日志配置
+        access_log=True,
+        use_colors=True
     )
