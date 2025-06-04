@@ -1665,8 +1665,8 @@
                     <div class="card-body py-2">
                         <h6 class="section-subtitle mb-2">
                             <i class="bi bi-list-check"></i> 场景选择
-                        </h6>
-                        <div class="d-flex flex-wrap justify-content-center gap-3 mt-2">
+                        </h6>                        <div class="d-flex flex-wrap justify-content-center gap-3 mt-2">
+                            <!-- 第一行：原有场景 -->
                             <div class="scenario-option" data-scenario="server-room">
                                 <div class="scenario-icon">
                                     <i class="bi bi-hdd-rack"></i>
@@ -1691,11 +1691,45 @@
                                 </div>
                                 <div class="scenario-name">违停检测</div>
                             </div>
-                            <div class="scenario-option" data-scenario="custom">
+                            <div class="scenario-option" data-scenario="fishing-detection">
                                 <div class="scenario-icon">
-                                    <i class="bi bi-plus-circle"></i>
+                                    <i class="bi bi-water"></i>
                                 </div>
-                                <div class="scenario-name">待添加</div>
+                                <div class="scenario-name">钓鱼检测</div>
+                            </div>
+                            
+                            <!-- 换行分隔 -->
+                            <div class="w-100"></div>
+                            
+                            <!-- 第二行：新增场景 -->
+                            <div class="scenario-option" data-scenario="garbage-detection">
+                                <div class="scenario-icon">
+                                    <i class="bi bi-recycle"></i>
+                                </div>
+                                <div class="scenario-name">垃圾乱扔</div>
+                            </div>
+                            <div class="scenario-option" data-scenario="fence-damage">
+                                <div class="scenario-icon">
+                                    <i class="bi bi-shield-slash"></i>
+                                </div>
+                                <div class="scenario-name">围栏破损</div>
+                            </div>                            <div class="scenario-option" data-scenario="construction-safety">
+                                <div class="scenario-icon">
+                                    <i class="bi bi-cone-striped"></i>
+                                </div>
+                                <div class="scenario-name">施工安全</div>
+                            </div>
+                            <div class="scenario-option" data-scenario="water-pollution">
+                                <div class="scenario-icon">
+                                    <i class="bi bi-droplet-half"></i>
+                                </div>
+                                <div class="scenario-name">水体污染</div>
+                            </div>
+                            <div class="scenario-option" data-scenario="fire-lane">
+                                <div class="scenario-icon">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                </div>
+                                <div class="scenario-name">消防通道</div>
                             </div>
                             <div class="d-flex align-items-center">
                                 <button class="btn btn-success btn-sm" type="button" id="startScenarioBtn">
@@ -4884,9 +4918,25 @@
                             break;
                         case 'fire':
                             prompt = '分析当前画面：1. 是否存在明火、烟雾或其他火灾迹象？2. 如有火情，描述火势大小、位置和蔓延趋势。3. 画面中是否有易燃物品处于危险位置？4. 是否有人员被困在火场中？';
-                            break;
-                        case 'illegal-parking':
+                            break;                        case 'illegal-parking':
                             prompt = '分析当前画面：1. 是否存在车辆违规停放现象？包括但不限于：占用消防通道、盲道、人行道、禁停区域等。2. 如发现违停车辆，请描述车辆类型、颜色、位置和违停类型。3. 违停行为是否影响交通通行或造成安全隐患？4. 周围是否有相关的禁停标识或标线？5. 请评估违停行为的严重程度并提出处理建议。';
+                            break;                        case 'fishing-detection':
+                            prompt = '分析当前画面：1. 是否有人员在进行钓鱼活动？如有，请描述钓鱼者的位置、人数和钓鱼装备（鱼竿、鱼线、鱼桶等）。2. 钓鱼区域是否为禁止垂钓的水域？比如饮用水源保护区、航道、水库大坝、公园景观水域等。3. 是否有相关的禁止垂钓标识或公告牌？4. 钓鱼活动是否对环境造成影响（如留下垃圾、破坏植被等）？5. 如果是禁钓区域，请评估违规钓鱼行为的严重程度并提出处理建议。6. 分析钓鱼者的行为是否符合当地渔业管理规定。';
+                            break;
+                        case 'garbage-detection':
+                            prompt = '分析当前画面：1. 是否存在垃圾乱扔现象？如有，请详细描述垃圾的类型（塑料袋、饮料瓶、烟头、食物包装、纸屑等）、位置和数量。2. 垃圾是否散落在不适当的地方？如道路、绿化带、水体边、公共设施周围等。3. 是否有人正在进行乱扔垃圾的行为？描述其行为过程。4. 周围是否有垃圾桶等垃圾收集设施？距离是否合理？5. 评估垃圾对环境和市容的影响程度，提出清理和管理建议。';
+                            break;
+                        case 'fence-damage':
+                            prompt = '分析当前画面：1. 是否存在围栏破损情况？包括围栏缺失、倒塌、变形、锈蚀、开裂等。2. 如发现破损，请描述破损的具体位置、范围和严重程度。3. 破损是否造成安全隐患？如人员可能误入危险区域、动物可能逃逸等。4. 围栏类型是什么？如铁丝网、栅栏、护栏、安全栏等。5. 是否有人为破坏的痕迹？6. 评估修复的紧急程度并提出维护建议。';
+                            break;
+                        case 'construction-safety':
+                            prompt = '分析当前画面：1. 施工人员是否正确佩戴安全防护装备？包括安全帽、安全带、防护服、安全鞋等。2. 是否存在违规作业行为？如高空作业无防护、违规操作设备、在危险区域作业等。3. 施工现场是否设置了必要的安全警示标识和隔离措施？4. 施工设备和材料是否安全放置？是否存在倒塌、滑落等风险？5. 是否有非施工人员误入施工区域的情况？6. 评估整体安全状况并提出改进建议。';
+                            break;
+                        case 'water-pollution':
+                            prompt = '分析当前画面：1. 水体颜色是否异常？如浑浊、发黑、发红、发绿等异常颜色。2. 水面是否有漂浮物？包括垃圾、油污、泡沫、死鱼、异物等。3. 是否有污水排放现象？如管道排水、工业废水、生活污水等。4. 水体周围是否有污染源？如工厂排放口、垃圾堆积、化学品泄漏等。5. 是否有异常气味或其他污染迹象？6. 评估污染程度和对环境的影响，提出监管和处理建议。';
+                            break;
+                        case 'fire-lane':
+                            prompt = '分析当前画面：1. 消防通道是否被占用或堵塞？包括车辆停放、物品堆积、设施阻挡等。2. 消防通道的宽度是否符合要求？是否足够消防车辆通行？3. 消防通道标识是否清晰可见？包括地面标线、指示牌、警示标识等。4. 是否有人在消防通道内从事不当活动？如摆摊、存放物品、临时搭建等。5. 通道路面是否平整？是否存在影响通行的障碍物？6. 评估对消防救援的影响程度，提出整改和管理建议。';
                             break;
                         case 'custom':
                             prompt = '请分析画面中的异常情况，包括但不限于设备故障、环境异常、安全隐患等。';
